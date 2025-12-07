@@ -1,26 +1,26 @@
 version: '3.8'
 
 services:
-  # 1. The Nginx Proxy (The Front Door)
-  nginx:
-    image: nginx:latest
+  # 1. Caddy (Web Server)
+  # Handles HTTPS (if domain exists) or HTTP (if IP only)
+  caddy:
+    image: caddy:latest
     restart: always
     ports:
-      - "80:80"      # HTTP Redirect
-      - "443:443"    # Dashboard HTTPS
-      - "8443:8443"  # Metabase HTTPS
+      - "80:80"
+      - "443:443"
     volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d
-      - ./nginx/certs:/etc/nginx/certs
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
       - app
       - metabase
 
-  # 2. The Dashboard (Hidden behind Nginx)
+  # 2. Dashboard API
   app:
     build: .
     restart: always
-    # Removed "ports" section so it's only accessible internally
     volumes:
       - ./config/generated_secrets.env:/app/config/secrets.env
       - ./logs:/app/logs
@@ -29,7 +29,7 @@ services:
     environment:
       - AI_SERVER_URL=${AI_SERVER_URL}
 
-  # 3. The Database
+  # 3. Database
   db:
     image: postgres:15
     restart: always
@@ -41,11 +41,10 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./schema.sql:/docker-entrypoint-initdb.d/init.sql
 
-  # 4. Metabase (Hidden behind Nginx)
+  # 4. Metabase
   metabase:
     image: metabase/metabase:latest
     restart: always
-    # Removed "ports" section
     environment:
       MB_DB_TYPE: postgres
       MB_DB_DBNAME: ${DB_NAME}
@@ -53,10 +52,10 @@ services:
       MB_DB_USER: ${DB_USER}
       MB_DB_PASS: ${DB_PASS}
       MB_DB_HOST: db
-      # Tell Metabase it's running on HTTPS now
-      MB_SITE_URL: https://${AI_SERVER_URL}:8443 
     depends_on:
       - db
 
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:
