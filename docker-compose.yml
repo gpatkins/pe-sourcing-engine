@@ -1,12 +1,26 @@
 version: '3.8'
 
 services:
-  # 1. The Dashboard & Pipeline
+  # 1. The Nginx Proxy (The Front Door)
+  nginx:
+    image: nginx:latest
+    restart: always
+    ports:
+      - "80:80"      # HTTP Redirect
+      - "443:443"    # Dashboard HTTPS
+      - "8443:8443"  # Metabase HTTPS
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/certs:/etc/nginx/certs
+    depends_on:
+      - app
+      - metabase
+
+  # 2. The Dashboard (Hidden behind Nginx)
   app:
     build: .
     restart: always
-    ports:
-      - "8000:8000"
+    # Removed "ports" section so it's only accessible internally
     volumes:
       - ./config/generated_secrets.env:/app/config/secrets.env
       - ./logs:/app/logs
@@ -15,7 +29,7 @@ services:
     environment:
       - AI_SERVER_URL=${AI_SERVER_URL}
 
-  # 2. The Database
+  # 3. The Database
   db:
     image: postgres:15
     restart: always
@@ -27,12 +41,11 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./schema.sql:/docker-entrypoint-initdb.d/init.sql
 
-  # 3. Metabase (Business Intelligence)
+  # 4. Metabase (Hidden behind Nginx)
   metabase:
     image: metabase/metabase:latest
     restart: always
-    ports:
-      - "3000:3000"
+    # Removed "ports" section
     environment:
       MB_DB_TYPE: postgres
       MB_DB_DBNAME: ${DB_NAME}
@@ -40,6 +53,8 @@ services:
       MB_DB_USER: ${DB_USER}
       MB_DB_PASS: ${DB_PASS}
       MB_DB_HOST: db
+      # Tell Metabase it's running on HTTPS now
+      MB_SITE_URL: https://${AI_SERVER_URL}:8443 
     depends_on:
       - db
 
