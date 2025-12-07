@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>PE Sourcing Engine Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+        body { margin: 0; min-height: 100vh; font-family: "Inter", sans-serif; background: radial-gradient(circle at top left, #1e293b 0, #020617 55%); color: #e5e7eb; display: flex; flex-direction: column; }
+        .shell { max-width: 1080px; margin: 32px auto; padding: 0 20px 32px; width: 100%; flex: 1; }
+        
+        /* Header */
+        .header { margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid rgba(148, 163, 184, 0.25); display: flex; justify-content: space-between; align-items: center; }
+        .brand-title { font-size: 1.5rem; font-weight: 600; }
+        .brand-subtitle { font-size: 0.9rem; color: #9ca3af; }
+        
+        /* Status Bar */
+        .status-bar { display: flex; justify-content: space-between; align-items: center; background: rgba(15, 23, 42, 0.6); padding: 15px 20px; border-radius: 12px; border: 1px solid rgba(31, 41, 55, 0.9); margin-bottom: 20px; }
+        .status-indicator { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+        .status-dot { width: 12px; height: 12px; border-radius: 50%; background: #64748b; box-shadow: 0 0 5px rgba(100, 116, 139, 0.5); transition: all 0.3s ease; }
+        .status-dot.active { background: #22c55e; box-shadow: 0 0 10px rgba(34, 197, 94, 0.8); animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+        
+        /* Metabase Button */
+        .metabase-link { display: inline-flex; align-items: center; gap: 8px; color: #60a5fa; text-decoration: none; font-size: 0.9rem; font-weight: 500; }
+        .metabase-link:hover { text-decoration: underline; }
+
+        /* Stats Cards */
+        .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 26px; }
+        .card { background: rgba(15, 23, 42, 0.96); border-radius: 12px; padding: 16px; border: 1px solid rgba(31, 41, 55, 0.9); transition: all 0.2s ease; }
+        .card:hover { background: rgba(30, 41, 59, 1); }
+        .card-title { font-size: 1.5rem; font-weight: 600; margin-bottom: 4px; color: #e2e8f0; }
+        .card-label { font-size: 0.85rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+        
+        /* Terminal */
+        .terminal-window { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 15px; font-family: "Menlo", monospace; height: 300px; overflow-y: auto; color: #38bdf8; font-size: 0.8rem; margin-bottom: 30px; box-shadow: inset 0 0 20px rgba(0,0,0,0.5); }
+        .log-line { margin-bottom: 2px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+
+        /* Controls */
+        .controls { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 40px; }
+        .btn { display: inline-flex; justify-content: center; align-items: center; width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(148,163,184,0.35); background: rgba(30,41,59,0.8); color: #e5e7eb; text-decoration: none; cursor: pointer; transition: background 0.2s; font-weight: 500; font-size: 0.9rem; }
+        .btn:hover { background: rgba(59,130,246,0.2); border-color: rgba(96,165,250,0.6); }
+        .btn-primary { background: rgba(59,130,246,0.15); border-color: rgba(96,165,250,0.6); color: #bfdbfe; }
+        .btn-stop { background: rgba(239, 68, 68, 0.15); border-color: rgba(248, 113, 113, 0.6); color: #fca5a5; }
+        .btn-stop:hover { background: rgba(239, 68, 68, 0.25); }
+
+        /* Footer */
+        .footer { padding: 20px 0; text-align: center; border-top: 1px solid rgba(148, 163, 184, 0.1); color: #64748b; font-size: 0.85rem; margin-top: auto; }
+    </style>
+</head>
+<body>
+<div class="shell">
+
+    <div class="header">
+        <div>
+            <div class="brand-title">PE Sourcing Engine</div>
+            <div class="brand-subtitle">Automated Deal Origination Platform</div>
+        </div>
+        <div>
+            <a href="http://10.55.55.55:3000/" target="_blank" class="metabase-link">📊 Open Metabase Analytics ↗</a>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <div class="status-indicator">
+            <div id="status-dot" class="status-dot"></div>
+            <span id="status-text">System Idle</span>
+        </div>
+        <div>
+            <button onclick="stopPipeline()" class="btn btn-stop" style="width:auto; padding: 6px 16px;">🛑 STOP PROCESS</button>
+        </div>
+    </div>
+
+    <div class="cards">
+        <div class="card">
+            <div class="card-label">Discovered</div>
+            <div class="card-title" id="stat-discovered">0</div>
+            <div style="font-size:0.8rem; color:#64748b;">Raw targets found</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Enriched</div>
+            <div class="card-title" id="stat-enriched">0</div>
+            <div style="font-size:0.8rem; color:#64748b;">Full data collected</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Scored</div>
+            <div class="card-title" id="stat-scored">0</div>
+            <div style="font-size:0.8rem; color:#64748b;">Ranked & Rated</div>
+        </div>
+        <div class="card" style="border-color: rgba(248,113,113,0.3);">
+            <div class="card-label" style="color:#fca5a5;">Risks</div>
+            <div class="card-title" id="stat-risk" style="color:#f87171;">0</div>
+            <div style="font-size:0.8rem; color:#fca5a5;">Active Alerts</div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <form method="post" action="/run/discover"><button class="btn" type="submit">1. Run Discovery</button></form>
+        <form method="post" action="/run/enrich"><button class="btn btn-primary" type="submit">2. Run Enrichment</button></form>
+        <form method="post" action="/run/score"><button class="btn" type="submit">3. Run Scoring</button></form>
+        <a href="/discovery-queries" class="btn">Manage Queries</a>
+    </div>
+
+    <div class="section-title" style="margin-bottom:8px; font-weight:600; font-size:0.9rem; color:#94a3b8;">Live Execution Logs</div>
+    <div class="terminal-window" id="terminal">
+        <div class="log-line">Connecting to log stream...</div>
+    </div>
+
+</div>
+
+<div class="footer">
+    Developed by Gabriel Atkinson
+</div>
+
+<script>
+    function stopPipeline() {
+        if(confirm("Are you sure you want to FORCE STOP the current process?")) {
+            fetch('/api/stop', {method: 'POST'})
+                .then(r => r.json())
+                .then(d => alert("Stop signal sent. Process will halt shortly."));
+        }
+    }
+
+    function updateDashboard() {
+        fetch('/api/status')
+            .then(r => r.json())
+            .then(data => {
+                // Update Status Bar
+                const statusText = document.getElementById('status-text');
+                const statusDot = document.getElementById('status-dot');
+                
+                if (data.status === 'idle') {
+                    statusText.innerText = "System Idle";
+                    statusText.style.color = "#94a3b8";
+                    statusDot.className = "status-dot"; // gray
+                } else {
+                    statusText.innerText = "Running: " + data.status;
+                    statusText.style.color = "#4ade80";
+                    statusDot.className = "status-dot active"; // green pulse
+                }
+
+                // Update Stats
+                document.getElementById('stat-discovered').innerText = data.stats.discovered_count;
+                document.getElementById('stat-enriched').innerText = data.stats.enriched_count;
+                document.getElementById('stat-scored').innerText = data.stats.scored_count;
+                document.getElementById('stat-risk').innerText = data.stats.risk_count;
+            })
+            .catch(err => console.error("Stats poll failed", err));
+    }
+
+    function updateLogs() {
+        fetch('/api/logs/stream')
+            .then(r => r.json())
+            .then(data => {
+                const terminal = document.getElementById('terminal');
+                terminal.innerHTML = data.lines.map(line => `<div class="log-line">${line}</div>`).join('');
+                terminal.scrollTop = terminal.scrollHeight;
+            });
+    }
+
+    setInterval(updateDashboard, 2000);
+    setInterval(updateLogs, 2000);
+    updateDashboard();
+    updateLogs();
+</script>
+</body>
+</html>

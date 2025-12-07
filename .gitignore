@@ -1,0 +1,15 @@
+# --- Security (NEVER COMMIT THESE) ---
+config/secrets.env
+config/generated_secrets.env
+.env
+
+# --- Heavy/Junk Folders ---
+venv/
+__pycache__/
+*.pyc
+logs/*
+*.log
+*.tar.gz
+
+# --- OS Junk ---
+.DS_Store

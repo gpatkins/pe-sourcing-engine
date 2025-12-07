@@ -1,0 +1,183 @@
+from __future__ import annotations
+
+import datetime as dt
+import logging
+from pathlib import Path
+from typing import Any, Dict, List
+
+import psycopg2.extras
+import yaml
+
+from etl.utils.db import get_connection
+
+# --- IMPORT ENRICHMENT MODULES ---
+from enrich.domain import DomainEnricher
+from enrich.about import AboutEnricher
+from enrich.ecommerce import EcommerceEnricher
+from enrich.traffic import TrafficEnricher
+from enrich.industry import IndustryEnricher
+from enrich.founder import FounderEnricher
+from enrich.revenue import RevenueEnricher
+from enrich.ai_classifier import AIClassifier  # <--- NEW: Import the AI Module
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
+)
+logger = logging.getLogger("enrichment-runner")
+
+
+def load_settings() -> Dict[str, Any]:
+    base_dir = Path(__file__).resolve().parent
+    cfg_path = base_dir / "config" / "settings.yaml"
+    with cfg_path.open("r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def build_modules(config: Dict[str, Any]):
+    enrichment_cfg = config.get("enrichment", {})
+    modules_cfg = enrichment_cfg.get("modules", {})
+
+    common_cfg = {
+        "http_timeout_seconds": enrichment_cfg.get("http_timeout_seconds", 10),
+        "user_agent": enrichment_cfg.get("user_agent", "PE-Sourcing-Engine/0.1"),
+        "revenue_estimator": enrichment_cfg.get("revenue_estimator", {}),
+    }
+
+    modules = []
+
+    # Standard Modules
+    if modules_cfg.get("domain", True):
+        modules.append(DomainEnricher(common_cfg))
+    if modules_cfg.get("about", True):
+        modules.append(AboutEnricher(common_cfg))
+    if modules_cfg.get("ecommerce", True):
+        modules.append(EcommerceEnricher(common_cfg))
+    if modules_cfg.get("traffic", True):
+        modules.append(TrafficEnricher(common_cfg))
+    if modules_cfg.get("industry", True):
+        modules.append(IndustryEnricher(common_cfg))
+    if modules_cfg.get("founder", False):
+        modules.append(FounderEnricher(common_cfg))
+    if modules_cfg.get("revenue", True):
+        modules.append(RevenueEnricher(common_cfg))
+
+    # --- NEW: AI CLASSIFIER MODULE ---
+    # We add this last so it can use data found by previous modules (like description)
+    modules.append(AIClassifier(common_cfg))
+    # ---------------------------------
+
+    logger.info("Loaded modules: %s", ", ".join([m.name for m in modules]))
+    return modules
+
+
+def fetch_companies_to_enrich(conn, batch_size: int) -> List[Dict[str, Any]]:
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        # We fetch 'pending' OR 'partial' so we can retry incomplete ones
+        cur.execute(
+            """
+            SELECT *
+            FROM companies
+            WHERE enrichment_status IS NULL
+               OR enrichment_status IN ('pending', 'partial')
+            ORDER BY created_at DESC
+            LIMIT %s;
+            """,
+            (batch_size,),
+        )
+        return cur.fetchall()
+
+
+def apply_modules(company: Dict[str, Any], modules) -> Dict[str, Any]:
+    updates: Dict[str, Any] = {}
+    
+    # We start with the current state of the company
+    current_state = company.copy()
+
+    for module in modules:
+        try:
+            # Pass the accumulated state to the module
+            # This allows the AI module to see the 'description' found by the About module
+            delta = module.enrich(current_state)
+            if delta:
+                updates.update(delta)
+                current_state.update(delta) # Update state for next module in chain
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Module %s failed for company id=%s: %s",
+                module.name,
+                company.get("id"),
+                exc,
+            )
+
+    return updates
+
+
+def update_company(conn, company_id, updates: Dict[str, Any]):
+    if not updates:
+        return
+
+    set_clauses = []
+    values = []
+
+    for col, val in updates.items():
+        set_clauses.append(f"{col} = %s")
+        values.append(val)
+
+    values.append(company_id)
+
+    sql = f"""
+        UPDATE companies
+        SET {", ".join(set_clauses)}
+        WHERE id = %s;
+    """
+
+    with conn.cursor() as cur:
+        cur.execute(sql, values)
+
+
+def mark_complete(conn, company_id):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE companies
+            SET enrichment_status = 'complete',
+                last_enriched_at = %s
+            WHERE id = %s;
+            """,
+            (dt.datetime.utcnow(), company_id),
+        )
+
+
+def mark_partial(conn, company_id):
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE companies SET enrichment_status = 'partial' WHERE id = %s;",
+            (company_id,),
+        )
+
+
+def main():
+    settings = load_settings()
+    enrichment_cfg = settings.get("enrichment", {})
+    batch_size = int(enrichment_cfg.get("batch_size", 50))
+
+    conn = get_connection()
+    conn.autocommit = False
+
+    modules = build_modules(settings)
+    companies = fetch_companies_to_enrich(conn, batch_size)
+
+    logger.info("Fetched %d companies to enrich", len(companies))
+
+    # ... inside mai    try:
+        for company in companies:
+            # ... (loop code) ...
+            if updates:
+                # ...
+                conn.commit()
+            else:
+                mark_partial(conn, cid)
+                conn.commit()
+    finally:
+        conn.close()

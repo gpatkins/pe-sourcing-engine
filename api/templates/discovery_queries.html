@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Discovery Query Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+        body { margin: 0; min-height: 100vh; font-family: "Inter", sans-serif; background: radial-gradient(circle at top left, #1e293b 0, #020617 55%); color: #e5e7eb; }
+        .shell { max-width: 1040px; margin: 32px auto; padding: 0 16px 32px; }
+        .title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
+        h1 { margin: 0; font-size: 1.4rem; }
+        .subtitle { font-size: 0.9rem; color: #9ca3af; }
+        .btn { display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.6); padding: 6px 14px; font-size: 0.85rem; cursor: pointer; background: transparent; color: #e5e7eb; text-decoration: none; }
+        .btn:hover { background: rgba(148, 163, 184, 0.12); }
+        .btn-primary { background: rgba(59,130,246,0.15); border-color: rgba(96,165,250,0.6); color: #bfdbfe; }
+        .btn-primary:hover { background: rgba(59,130,246,0.28); }
+        .btn-danger { border-color: #f97373; color: #fecaca; }
+        .btn-danger:hover { background: rgba(248, 113, 113, 0.12); }
+        
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 0.85rem; }
+        th, td { padding: 8px 10px; border-bottom: 1px solid rgba(31, 41, 55, 0.9); }
+        th { text-align: left; color: #9ca3af; font-weight: 500; }
+        tr:hover td { background: rgba(15, 23, 42, 0.8); }
+        .card { background: rgba(15, 23, 42, 0.95); border-radius: 12px; padding: 14px 16px 16px; border: 1px solid rgba(31, 41, 55, 0.9); box-shadow: 0 18px 35px rgba(0, 0, 0, 0.5); margin-bottom: 18px; }
+        .card-title { font-size: 1rem; font-weight: 500; margin-bottom: 6px; }
+        .card-subtitle { font-size: 0.85rem; color: #9ca3af; margin-bottom: 10px; }
+        .form-grid { display: grid; grid-template-columns: 1fr 120px auto; gap: 10px; align-items: center; }
+        input[type="text"], input[type="number"] { width: 100%; padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(55, 65, 81, 0.9); background: rgba(15, 23, 42, 0.9); color: #e5e7eb; font-size: 0.85rem; }
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    </style>
+</head>
+<body>
+<div class="shell">
+    <div class="title-row">
+        <div>
+            <h1>Discovery Query Manager</h1>
+            <div class="subtitle">Manage the Google Places search queue.</div>
+        </div>
+        <div><a href="/" class="btn">← Back to Dashboard</a></div>
+    </div>
+
+    <div class="card" style="border: 1px solid rgba(59,130,246,0.3);">
+        <div class="card-title">🚀 Scale Generator</div>
+        <div class="card-subtitle">
+            Enter a base intent and we will generate 50 targeted queries (one per state).
+        </div>
+        <form method="post" action="/discovery-queries/generate">
+            <div class="form-grid">
+                <input type="text" name="base_query" placeholder="Enter base query (e.g. Commercial Roofing)" required />
+                <input type="number" name="limit" placeholder="Max" value="20" min="1" title="Max results per city" />
+                <button class="btn btn-primary" type="submit">Generate 50 Queries</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="two-col">
+        <div class="card">
+            <div class="card-title">Add Single Query</div>
+            <form method="post" action="/discovery-queries/add">
+                <div style="display: grid; gap: 8px;">
+                    <input type="text" name="label" placeholder="Label (optional)" />
+                    <input type="text" name="text_query" placeholder="Query text..." required />
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <input type="text" name="region_code" value="US" placeholder="Region" />
+                        <input type="number" name="limit" value="20" placeholder="Limit" min="1" />
+                    </div>
+                    <button class="btn" type="submit" style="width: 100%;">Add</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Cleanup</div>
+            <div class="card-subtitle">Remove all queries to start fresh.</div>
+            <form method="post" action="/discovery-queries/delete-all" onsubmit="return confirm('Are you sure? This will delete ALL queries.');">
+                <button class="btn btn-danger" type="submit" style="width: 100%;">Delete All Queries</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">Active Queries ({{ queries|length }})</div>
+        {% if queries %}
+        <table>
+            <thead>
+            <tr>
+                <th style="width: 5%;">#</th>
+                <th style="width: 25%;">Label</th>
+                <th>Text Query</th>
+                <th style="width: 10%;">Limit</th>
+                <th style="width: 5%;"></th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for idx, q in queries %}
+            <tr>
+                <td>{{ idx + 1 }}</td>
+                <td><span style="color:#94a3b8;">{{ q.label }}</span></td>
+                <td>{{ q.text_query }}</td>
+                <td>{{ q.limit or 20 }}</td>
+                <td>
+                    <form method="post" action="/discovery-queries/delete/{{ idx }}">
+                        <button class="btn btn-danger" type="submit" style="padding: 2px 8px;">×</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="padding: 20px; text-align: center; color: #64748b;">No queries defined. Use the Generator above!</div>
+        {% endif %}
+    </div>
+</div>
+</body>
+</html>

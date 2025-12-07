@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  # 1. The Dashboard & Pipeline
+  app:
+    build: .
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config/generated_secrets.env:/app/config/secrets.env
+      - ./logs:/app/logs
+    depends_on:
+      - db
+    environment:
+      - AI_SERVER_URL=${AI_SERVER_URL}
+
+  # 2. The Database
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # 3. Metabase (Business Intelligence)
+  metabase:
+    image: metabase/metabase:latest
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: ${DB_NAME}
+      MB_DB_PORT: 5432
+      MB_DB_USER: ${DB_USER}
+      MB_DB_PASS: ${DB_PASS}
+      MB_DB_HOST: db
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:

@@ -1,0 +1,47 @@
+naics_focus:
+- '238910'
+- '238990'
+- '561720'
+scoring:
+  financial_size:
+    weight: 25
+    bands:
+    - min_rev: 1000000
+      max_rev: 5000000
+      score: 10
+    - min_rev: 5000000
+      max_rev: 15000000
+      score: 18
+    - min_rev: 15000000
+      max_rev: 40000000
+      score: 25
+  industry:
+    weight: 15
+    naics_scores:
+      '238910': 15
+      '238990': 14
+      '561720': 12
+thresholds:
+  baserow_push_score: 70
+enrichment:
+  batch_size: 500
+  http_timeout_seconds: 10
+  user_agent: PE-Sourcing-Engine/0.1
+  modules:
+    domain: true
+    about: true
+    ecommerce: true
+    traffic: true
+    industry: true
+    founder: false
+    revenue: true
+  revenue_estimator:
+    default_employee_revenue: 250000
+    min_revenue: 1000000
+    max_revenue: 50000000
+discovery:
+  queries:
+  - label: web developer agency
+    text_query: web developer agency in portland or
+    region_code: US
+    limit: 4

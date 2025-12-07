@@ -1,0 +1,47 @@
+# --- DASHBOARD & API ---
+# The web framework that runs the Dashboard GUI and API endpoints.
+# Used in: api/main.py
+fastapi
+
+# The high-performance server that runs the FastAPI app.
+# Used in: Dockerfile (CMD), systemd service
+uvicorn[standard]
+
+# Required by FastAPI to handle Form inputs (like the "Query Generator" inputs).
+# Used in: api/main.py (Form data)
+python-multipart
+
+# Templating engine to render the HTML dashboard files.
+# Used in: api/main.py (TemplateResponse), api/templates/*.html
+jinja2
+
+# --- DATABASE & CONFIG ---
+# The PostgreSQL adapter (driver) allowing Python to talk to the DB.
+# Used in: etl/utils/db.py
+psycopg2-binary
+
+# Loads configuration secrets from .env files.
+# Used in: api/main.py, etl/utils/db.py, etl/discover/google_places.py
+python-dotenv
+
+# Parses the YAML configuration file for settings.
+# Used in: api/main.py, enrich_companies.py (loading settings.yaml)
+pyyaml
+
+# --- NETWORKING & SCRAPING ---
+# The standard library for making HTTP requests to APIs and Websites.
+# Used in: etl/discover/google_places.py, enrich/news_finder.py, enrich/owner_finder.py
+requests
+
+# HTML Parsing library used to scrape text from websites.
+# Used in: enrich/about.py (text extraction), enrich/email_finder.py (email scraping)
+beautifulsoup4
+
+# --- INTELLIGENCE & AI ---
+# The official Google Gemini SDK for AI processing.
+# Used in: enrich/ai_classifier.py, enrich/owner_finder.py
+google-generativeai
+
+# DuckDuckGo Search library (replaces paid SERP APIs for social finding).
+# Used in: enrich/linkedin_finder.py
+ddgs
