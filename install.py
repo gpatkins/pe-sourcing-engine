@@ -33,18 +33,48 @@ def check_docker():
             sys.exit(1)
 
 def setup_firewall():
-    print("\n--- 🛡️ Firewall Setup (Ports 8000 & 3000) ---")
+    print("\n--- 🛡️ Firewall Setup (Ports 80 & 443) ---")
+    ports = ["80", "443"]
+    
     if shutil.which("firewall-cmd"):
-        run_command("sudo firewall-cmd --permanent --add-port=8000/tcp", ignore_errors=True)
-        run_command("sudo firewall-cmd --permanent --add-port=3000/tcp", ignore_errors=True)
+        for p in ports:
+            run_command(f"sudo firewall-cmd --permanent --add-port={p}/tcp", ignore_errors=True)
         run_command("sudo firewall-cmd --reload", ignore_errors=True)
         print("✅ Ports opened (Firewalld).")
     elif shutil.which("ufw"):
-        run_command("sudo ufw allow 8000/tcp", ignore_errors=True)
-        run_command("sudo ufw allow 3000/tcp", ignore_errors=True)
+        for p in ports:
+            run_command(f"sudo ufw allow {p}/tcp", ignore_errors=True)
         print("✅ Ports opened (UFW).")
     else:
         print("No standard firewall detected. Skipping.")
+
+def setup_caddy(domain):
+    print("\n--- 🔒 Caddy Configuration ---")
+    
+    # If no domain, we fallback to simple IP-based HTTP (Port 80)
+    if not domain:
+        caddy_content = """
+:80 {
+    reverse_proxy app:8000
+}
+"""
+        print("⚠️ No domain provided. Configuring for HTTP (Port 80) only.")
+        print("   (You will not have HTTPS/SSL without a domain name)")
+    else:
+        # Production HTTPS setup
+        caddy_content = f"""
+{domain} {{
+    reverse_proxy app:8000
+}}
+
+analytics.{domain} {{
+    reverse_proxy metabase:3000
+}}
+"""
+        print(f"✅ Configuring HTTPS for {domain} and analytics.{domain}")
+
+    with open("Caddyfile", "w") as f:
+        f.write(caddy_content)
 
 def setup_cli_alias():
     print("\n--- 🔗 CLI Setup ---")
@@ -58,16 +88,22 @@ def setup_cli_alias():
 
 def main():
     print("\n===========================================")
-    print("   PE Sourcing Engine - Installer v3.0")
+    print("   PE Sourcing Engine - Installer v3.1")
     print("===========================================\n")
 
     check_docker()
     
-    # Create logs dir
     os.makedirs("logs", exist_ok=True)
     run_command("chmod -R 777 logs")
 
     setup_firewall()
+
+    print("\n--- 🌐 Domain Setup ---")
+    print("If you have a domain (e.g. my-pe-firm.com), enter it below.")
+    print("This will auto-generate SSL certificates for HTTPS.")
+    print("If you only have an IP address, leave this blank.")
+    domain = prompt("Your Domain Name (Leave blank for IP-only)")
+    setup_caddy(domain)
 
     print("\n--- 🔐 Credentials Setup ---")
     admin_user = prompt("Set Dashboard Username", "admin")
@@ -111,8 +147,21 @@ SERPER_API_KEY={serper_key}
     print("\n🚀 Building and Starting Containers...")
     try:
         run_command("sudo docker compose up -d --build")
-        print("\n🎉 INSTALLATION COMPLETE!")
-        print("Type 'pe-engine' to open the Management Console.")
+        print("\n" + "="*40)
+        print("      🎉 INSTALLATION COMPLETE 🎉")
+        print("="*40)
+        if domain:
+            print(f"1. Dashboard: https://{domain}")
+            print(f"2. Metabase:  https://analytics.{domain}")
+        else:
+            # Get current IP for display
+            try:
+                ip = subprocess.check_output(['hostname', '-I']).decode().split()[0]
+            except:
+                ip = "SERVER_IP"
+            print(f"1. Dashboard: http://{ip} (Port 80)")
+        print(f"3. CLI Management: Type 'pe-engine'")
+        print("="*40 + "\n")
     except:
         print("\n❌ Docker start failed. Try running 'sudo docker compose up -d' manually.")
 
