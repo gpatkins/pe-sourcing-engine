@@ -1,47 +1,90 @@
+# =============================================================================
+# PE SOURCING ENGINE v5.1 - DEPENDENCIES
+# =============================================================================
+
 # --- DASHBOARD & API ---
 # The web framework that runs the Dashboard GUI and API endpoints.
 # Used in: api/main.py
-fastapi
+fastapi==0.104.1
 
-# The high-performance server that runs the FastAPI app.
+# The high-performance ASGI server that runs the FastAPI app.
 # Used in: Dockerfile (CMD), systemd service
-uvicorn[standard]
+uvicorn[standard]==0.24.0
 
-# Required by FastAPI to handle Form inputs (like the "Query Generator" inputs).
-# Used in: api/main.py (Form data)
-python-multipart
+# Required by FastAPI to handle Form inputs and file uploads.
+# Used in: api/main.py (Form data, file uploads)
+python-multipart==0.0.6
 
 # Templating engine to render the HTML dashboard files.
 # Used in: api/main.py (TemplateResponse), api/templates/*.html
-jinja2
+jinja2==3.1.2
+
+# --- AUTHENTICATION & SECURITY (v5.1) ---
+# JWT token creation and validation for user sessions.
+# Used in: api/auth.py (login tokens), api/dependencies.py (route protection)
+python-jose[cryptography]==3.3.0
+
+# Password hashing library using bcrypt for secure password storage.
+# Used in: api/auth.py (password hashing/verification), user registration
+passlib[bcrypt]==1.7.4
+
+# Email address validation for user registration.
+# Used in: api/auth.py (validate user emails during signup)
+email-validator==2.1.0
+
+# Cryptographic signing for secure session cookies and CSRF tokens.
+# Used in: api/main.py (session management), form CSRF protection
+itsdangerous==2.1.2
 
 # --- DATABASE & CONFIG ---
-# The PostgreSQL adapter (driver) allowing Python to talk to the DB.
-# Used in: etl/utils/db.py
-psycopg2-binary
+# PostgreSQL adapter - psycopg3 with native Python 3.14 support
+# Used in: etl/utils/db.py, api/models.py
+psycopg[binary]==3.3.2
+
+# ORM for database models and queries (v5.1 user management).
+# Used in: api/models.py (User, ApiCredential models)
+sqlalchemy==2.0.23
 
 # Loads configuration secrets from .env files.
 # Used in: api/main.py, etl/utils/db.py, etl/discover/google_places.py
-python-dotenv
+python-dotenv==1.0.0
 
 # Parses the YAML configuration file for settings.
 # Used in: api/main.py, enrich_companies.py (loading settings.yaml)
-pyyaml
+pyyaml==6.0.1
 
 # --- NETWORKING & SCRAPING ---
 # The standard library for making HTTP requests to APIs and Websites.
 # Used in: etl/discover/google_places.py, enrich/news_finder.py, enrich/owner_finder.py
-requests
+requests==2.31.0
 
 # HTML Parsing library used to scrape text from websites.
 # Used in: enrich/about.py (text extraction), enrich/email_finder.py (email scraping)
-beautifulsoup4
+beautifulsoup4==4.12.2
+
+# XML parsing library for advanced HTML processing - updated for Python 3.14 support
+# Used in: enrich/about.py (HTML parsing), web scraping modules
+lxml==5.3.0
+
+# Extracts root domain from URLs for deduplication.
+# Used in: etl/discover/google_places.py (domain deduplication)
+tldextract==5.1.0
 
 # --- INTELLIGENCE & AI ---
 # The official Google Gemini SDK for AI processing.
-# Used in: enrich/ai_classifier.py, enrich/owner_finder.py
-google-generativeai
+# Used in: enrich/ai_classifier.py (industry classification), enrich/owner_finder.py (ghost hunting)
+google-generativeai==0.3.1
 
-# DuckDuckGo Search library (replaces paid SERP APIs for social finding).
-# Used in: enrich/linkedin_finder.py
-ddgs
+# DuckDuckGo Search library for finding LinkedIn profiles and social links.
+# Used in: enrich/linkedin_finder.py (LinkedIn URL discovery)
+duckduckgo-search==4.1.1
+
+# --- LOGGING ---
+# Colored terminal logging for better readability during development.
+# Used in: etl/utils/logger.py (console log formatting)
+colorlog==6.8.0
+
+# --- FILE EXPORT ---
+# Excel file creation for company data exports
+# Used in: api/main.py (export companies to xlsx)
+openpyxl==3.1.5

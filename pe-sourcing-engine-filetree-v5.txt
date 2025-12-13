@@ -81,6 +81,7 @@
 │   └── pipeline.log
 ├── manage.py
 ├── pe-sourcing-engine-filetree.txt
+├── pe-sourcing-engine-filetree-v5.txt
 ├── __pycache__
 │   ├── enrich_companies.cpython-314.pyc
 │   └── run_pipeline.cpython-314.pyc
@@ -89,6 +90,7 @@
 ├── run_pipeline.py
 ├── schema.sql
 ├── scripts
+│   └── gen_certs.py
 └── venv
     ├── bin
     │   ├── activate
@@ -13237,4 +13239,4 @@
     ├── lib64 -> lib
     └── pyvenv.cfg
 
-1317 directories, 11921 files
+1317 directories, 11923 files

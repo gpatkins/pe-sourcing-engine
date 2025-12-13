@@ -40,8 +40,4 @@ enrichment:
     min_revenue: 1000000
     max_revenue: 50000000
 discovery:
-  queries:
-  - label: web developer agency
-    text_query: web developer agency in portland or
-    region_code: US
-    limit: 4
+  queries: []

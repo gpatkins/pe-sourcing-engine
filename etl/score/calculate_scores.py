@@ -1,7 +1,6 @@
 import os
 import yaml
 import logging
-import psycopg2.extras
 from etl.utils.db import get_connection, fetch_all_dict
 
 logger = logging.getLogger("scoring")
@@ -39,16 +38,15 @@ def calculate_score(company):
     if company.get("is_family_owned"):
         score += 20
         breakdown.append("family_owned")
-    
+
     # Franchises are usually bad targets for platform plays
     if company.get("is_franchise"):
         score -= 50
         breakdown.append("franchise_penalty")
-        
+
     # B2B / Commercial is preferred over pure residential
     ind_tag = (company.get("industry_tag") or "").lower()
     cust_type = (company.get("customer_type") or "").lower()
-    
     if "commercial" in ind_tag or "industrial" in ind_tag or "b2b" in cust_type:
         score += 20
         breakdown.append("commercial_focus")
@@ -61,7 +59,7 @@ def calculate_score(company):
     if company.get("owner_name"):
         score += 15
         breakdown.append("owner_known")
-        
+
     if company.get("linkedin_company_url") or company.get("owner_linkedin_url"):
         score += 15
         breakdown.append("linkedin_found")
@@ -80,23 +78,20 @@ def main():
     cfg = load_config()
 
     # Fetch all data needed for scoring
-    # Added 'risk_flags' to the query
     sql = """
-        SELECT 
-            id, name, revenue_estimate, 
+        SELECT
+            id, name, revenue_estimate,
             industry_tag, customer_type,
             is_family_owned, is_franchise,
             owner_name, linkedin_company_url, owner_linkedin_url,
             risk_flags
         FROM companies
     """
-    
     logger.info("Fetching companies to score...")
     companies = fetch_all_dict(sql)
     logger.info(f"Found {len(companies)} companies.")
 
     updates = []
-    
     # Calculate in Memory
     for c in companies:
         total = calculate_score(c)
@@ -105,16 +100,17 @@ def main():
     if not updates:
         return
 
-    # Batch Update
+    # Batch Update using psycopg3
     conn = get_connection()
     try:
         with conn:
             with conn.cursor() as cur:
-                psycopg2.extras.execute_batch(
-                    cur,
+                # psycopg3 way: use executemany instead of execute_batch
+                cur.executemany(
                     "UPDATE companies SET buyability_score = %s, updated_at = now() WHERE id = %s",
                     updates
                 )
+            conn.commit()
         logger.info(f"Updated scores for {len(updates)} companies.")
     finally:
         conn.close()

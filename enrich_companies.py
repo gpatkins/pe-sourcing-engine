@@ -4,8 +4,8 @@ import datetime as dt
 from pathlib import Path
 from typing import Any, Dict, List
 
-import psycopg2.extras
 import yaml
+from psycopg.rows import dict_row
 
 from etl.utils.db import get_connection
 from etl.utils.logger import setup_logger
@@ -44,21 +44,21 @@ def build_modules(config: Dict[str, Any]):
     }
 
     modules = []
-    
+
     modules.append(DomainEnricher(common_cfg))
-    modules.append(AboutEnricher(common_cfg)) 
+    modules.append(AboutEnricher(common_cfg))
     modules.append(LinkedInFinder(common_cfg))
 
     modules.append(EcommerceEnricher(common_cfg))
     modules.append(IndustryEnricher(common_cfg))
     modules.append(FounderEnricher(common_cfg))
-    
+
     modules.append(NewsFinder(common_cfg))
-    modules.append(AIClassifier(common_cfg)) 
-    modules.append(OwnerFinder(common_cfg)) 
-    
+    modules.append(AIClassifier(common_cfg))
+    modules.append(OwnerFinder(common_cfg))
+
     modules.append(EmailFinder(common_cfg))
-    
+
     if modules_cfg.get("revenue", True):
         modules.append(RevenueEnricher(common_cfg))
 
@@ -66,7 +66,7 @@ def build_modules(config: Dict[str, Any]):
     return modules
 
 def fetch_companies_to_enrich(conn, batch_size: int) -> List[Dict[str, Any]]:
-    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+    with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """
             SELECT *
@@ -85,7 +85,7 @@ def apply_modules(company: Dict[str, Any], modules) -> Dict[str, Any]:
     current_state = company.copy()
 
     for module in modules:
-        if should_stop(): 
+        if should_stop():
             break
 
         try:
@@ -120,8 +120,8 @@ def mark_partial(conn, company_id):
 
 def main():
     try:
-        set_running("Enrichment") 
-        
+        set_running("Enrichment")
+
         settings = load_settings()
         batch_size = int(settings.get("enrichment", {}).get("batch_size", 50))
         conn = get_connection()
@@ -129,7 +129,7 @@ def main():
 
         try:
             modules = build_modules(settings)
-            
+
             while True:
                 if should_stop():
                     logger.info("STOP SIGNAL RECEIVED. Halting.")
@@ -157,7 +157,7 @@ def main():
                     else:
                         mark_partial(conn, company["id"])
                         conn.commit()
-        
+
         finally:
             if 'conn' in locals():
                 conn.close()
