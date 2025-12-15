@@ -1,25 +1,42 @@
-# 1. Base Image: Lightweight Linux with Python 3.11
-FROM python:3.11-slim
+# PE Sourcing Engine v5.1 - Docker Image
+# Multi-user SaaS platform with JWT authentication
 
-# 2. System Dependencies: Required for Postgres (psycopg2)
+FROM python:3.14-slim
+
+LABEL maintainer="Gabriel Atkinson"
+LABEL version="5.1"
+LABEL description="PE Sourcing Engine - Automated Deal Origination Platform"
+
+# System dependencies for PostgreSQL, XML parsing, and compilation
 RUN apt-get update && apt-get install -y \
     gcc \
+    g++ \
     libpq-dev \
+    libxml2-dev \
+    libxslt-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 3. Setup App Directory
+# Create app directory
 WORKDIR /app
 
-# 4. Install Python Dependencies (Cached layer)
+# Copy and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# 5. Copy the Application Code
+# Copy application code
 COPY . .
 
-# 6. Open Port 8000
+# Create necessary directories
+RUN mkdir -p /app/logs /app/config
+
+# Expose port
 EXPOSE 8000
 
-# 7. Start the Dashboard
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/api/status || exit 1
+
+# Run the application
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
