@@ -1,7 +1,8 @@
 # PE Sourcing Engine v5.1 - Docker Image
 # Multi-user SaaS platform with JWT authentication
 
-FROM python:3.14-slim
+# DOWNGRADED to 3.13 to fix SQLAlchemy 2.0.35 compatibility issue
+FROM python:3.13-slim
 
 LABEL maintainer="Gabriel Atkinson"
 LABEL version="5.1"
