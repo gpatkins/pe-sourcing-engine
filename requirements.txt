@@ -28,6 +28,10 @@ python-jose[cryptography]==3.3.0
 # Used in: api/auth.py (password hashing/verification), user registration
 passlib[bcrypt]==1.7.4
 
+# CRITICAL FIX: Pin bcrypt to 4.0.1 to prevent passlib crash on start
+# Resolves "ValueError: password cannot be longer than 72 bytes"
+bcrypt==4.0.1
+
 # Email address validation for user registration.
 # Used in: api/auth.py (validate user emails during signup)
 email-validator==2.1.0
