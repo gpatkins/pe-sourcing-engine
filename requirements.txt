@@ -43,7 +43,7 @@ psycopg[binary]==3.3.2
 
 # ORM for database models and queries (v5.1 user management).
 # Used in: api/models.py (User, ApiCredential models)
-sqlalchemy==2.0.23
+sqlalchemy>=2.0.36
 
 # Loads configuration secrets from .env files.
 # Used in: api/main.py, etl/utils/db.py, etl/discover/google_places.py
