@@ -12,20 +12,6 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
       - ./schema_v5.1.sql:/docker-entrypoint-initdb.d/02-schema-v5.1.sql
-services:
-  # PostgreSQL Database
-  db:
-    image: postgres:15-alpine
-    container_name: pe-sourcing-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${DB_USER:-pe_sourcer}
-      POSTGRES_PASSWORD: ${DB_PASS:-changeme}
-      POSTGRES_DB: ${DB_NAME:-pe_sourcing_db}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
-      - ./schema_v5.1.sql:/docker-entrypoint-initdb.d/02-schema-v5.1.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pe_sourcer}"]
       interval: 10s
