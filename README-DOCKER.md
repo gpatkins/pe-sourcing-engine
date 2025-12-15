@@ -9,22 +9,46 @@ Complete containerized deployment of the PE Sourcing Engine with PostgreSQL, Fas
 - Docker Compose 2.0+
 - 2GB RAM minimum
 - 10GB disk space
+- GitHub account with repository access (private repo)
 
 ### Initial Setup
 
 1. **Clone the repository:**
 ```bash
+# Private repository - requires GitHub authentication
 git clone https://github.com/gpatkins/pe-sourcing-engine.git
 cd pe-sourcing-engine
 ```
 
-2. **Create environment file:**
+**Note:** This is a private repository. You'll need:
+- GitHub account with repository access
+- Git credentials configured (SSH key or personal access token)
+- If you don't have access, contact the repository owner
+
+2. **Run the interactive installer:**
 ```bash
+python3 install.py
+```
+
+The installer will guide you through:
+- Docker installation (if needed)
+- Firewall configuration
+- Domain setup (optional)
+- Database credentials
+- Security secrets generation
+- API key configuration
+- Container build and deployment
+
+3. **Alternative: Manual setup**
+
+If you prefer manual configuration:
+```bash
+# Create environment file
 cp .env.example .env
 nano .env  # Edit with your values
 ```
 
-3. **Generate secrets:**
+Generate secrets:
 ```bash
 # JWT Secret
 python3 -c "import secrets; print('JWT_SECRET_KEY=' + secrets.token_hex(32))" >> .env
@@ -33,20 +57,20 @@ python3 -c "import secrets; print('JWT_SECRET_KEY=' + secrets.token_hex(32))" >>
 python3 -c "import secrets; print('CSRF_SECRET=' + secrets.token_hex(32))" >> .env
 ```
 
-4. **Start the services:**
+Start the services:
 ```bash
 # Without Caddy (HTTP only)
-docker-compose up -d
+docker compose up -d
 
 # With Caddy (HTTPS)
-docker-compose --profile with-caddy up -d
+docker compose --profile with-caddy up -d
 ```
 
-5. **Access the application:**
-- Dashboard: http://localhost:8000
-- Metabase: http://localhost:3000
+4. **Access the application:**
+- Dashboard: http://localhost:8000 (or your domain)
+- Metabase: http://localhost:3000 (or metabase.yourdomain.com)
 
-6. **Login with default credentials:**
+5. **Login with default credentials:**
 - Email: `admin@dealgenome.local`
 - Password: `admin123`
 - **⚠️ Change this password immediately!**
@@ -121,49 +145,49 @@ docker-compose --profile with-caddy up -d
 
 ### Start Services
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ### Stop Services
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ### View Logs
 ```bash
 # All services
-docker-compose logs -f
+docker compose logs -f
 
 # Specific service
-docker-compose logs -f app
-docker-compose logs -f db
-docker-compose logs -f metabase
+docker compose logs -f app
+docker compose logs -f db
+docker compose logs -f metabase
 ```
 
 ### Restart Service
 ```bash
-docker-compose restart app
+docker compose restart app
 ```
 
 ### Execute Commands in Container
 ```bash
 # Access app shell
-docker-compose exec app bash
+docker compose exec app bash
 
 # Run pipeline manually
-docker-compose exec app python run_pipeline.py
+docker compose exec app python run_pipeline.py
 ```
 
 ### Database Access
 ```bash
 # PostgreSQL shell
-docker-compose exec db psql -U pe_sourcer -d pe_sourcing_db
+docker compose exec db psql -U pe_sourcer -d pe_sourcing_db
 
 # Backup database
-docker-compose exec db pg_dump -U pe_sourcer pe_sourcing_db > backup.sql
+docker compose exec db pg_dump -U pe_sourcer pe_sourcing_db > backup.sql
 
 # Restore database
-docker-compose exec -T db psql -U pe_sourcer pe_sourcing_db < backup.sql
+docker compose exec -T db psql -U pe_sourcer pe_sourcing_db < backup.sql
 ```
 
 ---
@@ -193,7 +217,7 @@ docker-compose exec -T db psql -U pe_sourcer pe_sourcing_db < backup.sql
 ```bash
    # Update Caddyfile with your domain
    # Start with Caddy profile
-   docker-compose --profile with-caddy up -d
+   docker compose --profile with-caddy up -d
 ```
 
 5. **Restrict Network Access:**
@@ -204,7 +228,7 @@ docker-compose exec -T db psql -U pe_sourcer pe_sourcing_db < backup.sql
 6. **Regular Backups:**
 ```bash
    # Automate with cron
-   0 2 * * * docker-compose exec db pg_dump -U pe_sourcer pe_sourcing_db > /backups/pe_$(date +\%Y\%m\%d).sql
+   0 2 * * * docker compose exec db pg_dump -U pe_sourcer pe_sourcing_db > /backups/pe_$(date +\%Y\%m\%d).sql
 ```
 
 ---
@@ -214,7 +238,7 @@ docker-compose exec -T db psql -U pe_sourcer pe_sourcing_db < backup.sql
 ### Application won't start
 ```bash
 # Check logs
-docker-compose logs app
+docker compose logs app
 
 # Common issues:
 # - Database not ready: Wait for health check
@@ -225,21 +249,21 @@ docker-compose logs app
 ### Database connection errors
 ```bash
 # Check database health
-docker-compose ps db
+docker compose ps db
 
 # Restart database
-docker-compose restart db
+docker compose restart db
 
 # Check connection
-docker-compose exec db pg_isready -U pe_sourcer
+docker compose exec db pg_isready -U pe_sourcer
 ```
 
 ### Permission errors
 ```bash
 # Fix volume permissions
-docker-compose down
+docker compose down
 sudo chown -R 1000:1000 ./logs ./config
-docker-compose up -d
+docker compose up -d
 ```
 
 ### Out of memory
@@ -251,6 +275,18 @@ docker stats
 # Docker Desktop: Settings > Resources > Memory
 ```
 
+### GitHub Authentication Issues
+```bash
+# If git clone fails with authentication error:
+
+# Option 1: Use SSH key (recommended)
+git clone git@github.com:gpatkins/pe-sourcing-engine.git
+
+# Option 2: Use Personal Access Token
+# Generate token at: https://github.com/settings/tokens
+# Use token as password when prompted
+```
+
 ---
 
 ## 📊 Monitoring
@@ -258,13 +294,13 @@ docker stats
 ### Health Checks
 ```bash
 # Check all services
-docker-compose ps
+docker compose ps
 
 # Application health
 curl http://localhost:8000/api/status
 
 # Database health
-docker-compose exec db pg_isready -U pe_sourcer
+docker compose exec db pg_isready -U pe_sourcer
 ```
 
 ### Resource Usage
@@ -282,7 +318,7 @@ docker system df
 tail -f ./logs/pipeline.log
 
 # Container logs
-docker-compose logs -f --tail=100 app
+docker compose logs -f --tail=100 app
 ```
 
 ---
@@ -295,11 +331,11 @@ docker-compose logs -f --tail=100 app
 git pull origin main
 
 # Rebuild containers
-docker-compose build --no-cache
+docker compose build --no-cache
 
 # Restart services
-docker-compose down
-docker-compose up -d
+docker compose down
+docker compose up -d
 ```
 
 ---
@@ -308,7 +344,7 @@ docker-compose up -d
 
 - **Main README:** `README.md`
 - **Schema Documentation:** `schema_v5.1.sql`
-- **GitHub Repository:** https://github.com/gpatkins/pe-sourcing-engine
+- **GitHub Repository:** https://github.com/gpatkins/pe-sourcing-engine (Private)
 
 ---
 
@@ -338,6 +374,31 @@ docker-compose up -d
 
 ---
 
+## 📖 Installation Methods Summary
+
+### Method 1: Interactive Installer (Recommended)
+```bash
+git clone https://github.com/gpatkins/pe-sourcing-engine.git
+cd pe-sourcing-engine
+python3 install.py
+```
+**Pros:** Guided setup, automatic configuration, beginner-friendly  
+**Cons:** Requires Python 3
+
+### Method 2: Manual Setup
+```bash
+git clone https://github.com/gpatkins/pe-sourcing-engine.git
+cd pe-sourcing-engine
+cp .env.example .env
+nano .env  # Configure manually
+docker compose up -d
+```
+**Pros:** Full control, understand every step  
+**Cons:** More technical, error-prone
+
+---
+
 **Version:** 5.1  
 **Last Updated:** December 2025  
-**Maintainer:** Gabriel Atkinson
+**Maintainer:** Gabriel Atkinson  
+**Repository:** Private - Access required
