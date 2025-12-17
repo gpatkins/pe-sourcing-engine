@@ -5,6 +5,7 @@ Main API application with JWT-based authentication and user management.
 
 from __future__ import annotations
 
+import json
 import os
 import secrets
 import csv
@@ -85,6 +86,9 @@ LOG_FILE = LOGS_DIR / "pipeline.log"
 
 load_dotenv(ENV_PATH)
 
+# Metabase URL configuration (v5.2)
+METABASE_URL = os.getenv("METABASE_URL", "http://localhost:3000")
+
 # --- FastAPI App ---
 app = FastAPI(title="DealGenome - PE Sourcing Engine v5.1")
 templates = Jinja2Templates(directory="api/templates")
@@ -132,34 +136,33 @@ def update_discovery_queries(queries: List[Dict[str, Any]]) -> None:
 
 # --- STATUS & STATS ---
 def get_dashboard_stats(user_id: Optional[int] = None, is_admin: bool = False) -> dict:
-    """Get dashboard statistics, optionally filtered by user."""
+    """Get dashboard statistics (all users see all companies)."""
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        
-        # Build WHERE clause based on user permissions
-        where_clause = "" if is_admin else "WHERE user_id = %s"
-        params = () if is_admin else (user_id,)
 
-        # 1. Total Discovered (All companies or user's companies)
-        cur.execute(f"SELECT COUNT(*) FROM companies {where_clause};", params)
+        # All users see all companies (no user-based filtering)
+        # Admin vs regular user distinction is for user management only, not data isolation
+        
+        # 1. Total Discovered
+        cur.execute("SELECT COUNT(*) FROM companies;")
         total = cur.fetchone()[0]
 
         # 2. Fully Enriched (Completed)
-        cur.execute(f"SELECT COUNT(*) FROM companies {where_clause} {'AND' if where_clause else 'WHERE'} enrichment_status = 'complete';", params)
+        cur.execute("SELECT COUNT(*) FROM companies WHERE enrichment_status = 'complete';")
         enriched = cur.fetchone()[0]
 
         # 3. Pending Enrichment (Queue)
-        cur.execute(f"SELECT COUNT(*) FROM companies {where_clause} {'AND' if where_clause else 'WHERE'} enrichment_status IN ('pending', 'partial');", params)
+        cur.execute("SELECT COUNT(*) FROM companies WHERE enrichment_status IN ('pending', 'partial');")
         pending = cur.fetchone()[0]
 
         # 4. Scored Companies
-        cur.execute(f"SELECT COUNT(*) FROM companies {where_clause} {'AND' if where_clause else 'WHERE'} buyability_score IS NOT NULL;", params)
+        cur.execute("SELECT COUNT(*) FROM companies WHERE buyability_score IS NOT NULL;")
         scored = cur.fetchone()[0]
 
         # 5. Risk Alerts
         try:
-            cur.execute(f"SELECT COUNT(*) FROM companies {where_clause} {'AND' if where_clause else 'WHERE'} risk_flags LIKE 'ALERT%';", params)
+            cur.execute("SELECT COUNT(*) FROM companies WHERE risk_flags LIKE 'ALERT%';")
             risks = cur.fetchone()[0]
         except:
             risks = 0
@@ -180,7 +183,7 @@ def get_dashboard_stats(user_id: Optional[int] = None, is_admin: bool = False) -
 def get_user_stats(user_id: int) -> dict:
     """Get user-specific statistics for profile page."""
     sql = """
-        SELECT 
+        SELECT
             COUNT(*) as total_companies,
             COUNT(CASE WHEN created_at > NOW() - INTERVAL '30 days' THEN 1 END) as companies_last_30_days,
             MAX(created_at) as last_company_added
@@ -200,7 +203,7 @@ async def login_page(request: Request, current_user: Optional[dict] = Depends(ge
     # If already logged in, redirect to dashboard
     if current_user:
         return RedirectResponse(url="/dashboard", status_code=HTTP_303_SEE_OTHER)
-    
+
     csrf_token = generate_csrf_token()
     return templates.TemplateResponse("login.html", {
         "request": request,
@@ -221,7 +224,7 @@ async def login(
     cur = conn.cursor()
     cur.execute("SELECT id, email, hashed_password, full_name, role, is_active FROM users WHERE email = %s", (email,))
     user = cur.fetchone()
-    
+
     if not user:
         return templates.TemplateResponse("login.html", {
             "request": request,
@@ -230,9 +233,9 @@ async def login(
             "email": email,
             "current_user": None
         }, status_code=400)
-    
+
     user_id, user_email, hashed_password, full_name, role, is_active = user
-    
+
     # Verify password
     if not verify_password(password, hashed_password):
         return templates.TemplateResponse("login.html", {
@@ -242,7 +245,7 @@ async def login(
             "email": email,
             "current_user": None
         }, status_code=400)
-    
+
     # Check if active
     if not is_active:
         return templates.TemplateResponse("login.html", {
@@ -252,21 +255,21 @@ async def login(
             "email": email,
             "current_user": None
         }, status_code=403)
-    
+
     # Update last login
     cur.execute("UPDATE users SET last_login = NOW() WHERE id = %s", (user_id,))
     conn.commit()
-    
+
     # Log activity
     log_user_activity(conn, user_id, ActivityType.LOGIN, {"ip": request.client.host})
-    
+
     conn.close()
-    
+
     # Create JWT token
     access_token = create_access_token(
         data={"user_id": user_id, "email": user_email, "role": role}
     )
-    
+
     # Set cookie and redirect
     redirect = RedirectResponse(url="/dashboard", status_code=HTTP_303_SEE_OTHER)
     redirect.set_cookie(
@@ -276,7 +279,7 @@ async def login(
         httponly=True,
         samesite="lax"
     )
-    
+
     return redirect
 
 @app.get("/logout")
@@ -319,7 +322,7 @@ async def register_user(
             "role": role,
             "current_user": admin
         }, status_code=400)
-    
+
     # Validate passwords match
     if password != confirm_password:
         return templates.TemplateResponse("register.html", {
@@ -331,7 +334,7 @@ async def register_user(
             "role": role,
             "current_user": admin
         }, status_code=400)
-    
+
     # Validate password strength
     is_valid, error_msg = validate_password_strength(password)
     if not is_valid:
@@ -344,7 +347,7 @@ async def register_user(
             "role": role,
             "current_user": admin
         }, status_code=400)
-    
+
     # Check if user already exists
     existing = fetch_one_dict("SELECT id FROM users WHERE email = %s", (email,))
     if existing:
@@ -357,7 +360,7 @@ async def register_user(
             "role": role,
             "current_user": admin
         }, status_code=400)
-    
+
     # Create user
     hashed_password = get_password_hash(password)
     conn = get_db_connection()
@@ -372,12 +375,12 @@ async def register_user(
     )
     new_user_id = cur.fetchone()[0]
     conn.commit()
-    
+
     # Log activity
     log_user_activity(conn, admin["user_id"], ActivityType.USER_CREATED, {"created_user_id": new_user_id, "email": email})
-    
+
     conn.close()
-    
+
     # Redirect with success message
     return RedirectResponse(url="/admin/users?success=User created successfully", status_code=HTTP_303_SEE_OTHER)
 
@@ -386,17 +389,17 @@ async def profile_page(request: Request, current_user: dict = Depends(get_curren
     """Display user profile page."""
     # Get user details
     user = fetch_one_dict("SELECT * FROM users WHERE id = %s", (current_user["user_id"],))
-    
+
     # Get user stats
     stats = get_user_stats(current_user["user_id"])
-    
+
     # Parse query parameters for messages
     messages = []
     if request.query_params.get("success"):
         messages.append({"type": "success", "text": request.query_params.get("success")})
     if request.query_params.get("error"):
         messages.append({"type": "error", "text": request.query_params.get("error")})
-    
+
     csrf_token = generate_csrf_token()
     return templates.TemplateResponse("profile.html", {
         "request": request,
@@ -415,7 +418,7 @@ async def update_profile_name(
 ):
     """Update user's full name."""
     execute("UPDATE users SET full_name = %s WHERE id = %s", (full_name.strip() or None, current_user["user_id"]))
-    
+
     return RedirectResponse(url="/profile?success=Name updated successfully", status_code=HTTP_303_SEE_OTHER)
 
 @app.post("/profile/change-password")
@@ -429,28 +432,28 @@ async def change_password(
     """Change user password."""
     # Verify current password
     user = fetch_one_dict("SELECT hashed_password FROM users WHERE id = %s", (current_user["user_id"],))
-    
+
     if not verify_password(current_password, user["hashed_password"]):
         return RedirectResponse(url="/profile?error=Current password is incorrect", status_code=HTTP_303_SEE_OTHER)
-    
+
     # Validate new passwords match
     if new_password != confirm_new_password:
         return RedirectResponse(url="/profile?error=New passwords do not match", status_code=HTTP_303_SEE_OTHER)
-    
+
     # Validate password strength
     is_valid, error_msg = validate_password_strength(new_password)
     if not is_valid:
         return RedirectResponse(url=f"/profile?error={error_msg}", status_code=HTTP_303_SEE_OTHER)
-    
+
     # Update password
     hashed_password = get_password_hash(new_password)
     execute("UPDATE users SET hashed_password = %s WHERE id = %s", (hashed_password, current_user["user_id"]))
-    
+
     # Log activity
     conn = get_db_connection()
     log_user_activity(conn, current_user["user_id"], ActivityType.PASSWORD_CHANGED, {})
     conn.close()
-    
+
     return RedirectResponse(url="/profile?success=Password changed successfully", status_code=HTTP_303_SEE_OTHER)
 
 # ============================================================================
@@ -462,18 +465,18 @@ async def admin_users_page(request: Request, admin: dict = Depends(require_admin
     """Admin user management page."""
     # Get all users with company counts
     users = fetch_all_dict("""
-        SELECT 
-            u.id, u.email, u.full_name, u.role, u.is_active, u.created_at, u.last_login,
-            COUNT(c.id) as company_count
-        FROM users u
-        LEFT JOIN companies c ON c.user_id = u.id
-        GROUP BY u.id, u.email, u.full_name, u.role, u.is_active, u.created_at, u.last_login
-        ORDER BY u.created_at DESC
-    """)
-    
+    SELECT
+        u.id, u.email, u.full_name, u.role, u.is_active, u.created_at, u.last_login,
+        COUNT(c.id) as company_count
+    FROM users u
+    LEFT JOIN companies c ON (c.user_id = u.id OR (u.role = 'admin' AND c.user_id IS NULL))
+    GROUP BY u.id, u.email, u.full_name, u.role, u.is_active, u.created_at, u.last_login
+    ORDER BY u.created_at DESC
+""")
+
     # Get recent activity
     recent_activity = fetch_all_dict("""
-        SELECT 
+        SELECT
             ua.id, ua.user_id, ua.activity_type, ua.details, ua.created_at,
             u.email as user_email
         FROM user_activity ua
@@ -481,14 +484,14 @@ async def admin_users_page(request: Request, admin: dict = Depends(require_admin
         ORDER BY ua.created_at DESC
         LIMIT 10
     """)
-    
+
     # Parse query parameters for messages
     messages = []
     if request.query_params.get("success"):
         messages.append({"type": "success", "text": request.query_params.get("success")})
     if request.query_params.get("error"):
         messages.append({"type": "error", "text": request.query_params.get("error")})
-    
+
     csrf_token = generate_csrf_token()
     return templates.TemplateResponse("admin_users.html", {
         "request": request,
@@ -499,6 +502,33 @@ async def admin_users_page(request: Request, admin: dict = Depends(require_admin
         "messages": messages if messages else None
     })
 
+@app.post("/admin/clear-companies")
+async def clear_companies_database(admin: dict = Depends(require_admin)):
+    """Clear all companies from the database (admin only)."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Truncate companies table (cascades to related data if needed)
+        cur.execute("TRUNCATE TABLE companies RESTART IDENTITY CASCADE;")
+        conn.commit()
+        
+        # Log the activity
+        log_user_activity(conn, admin["user_id"], ActivityType.DISCOVERY_RUN, {"action": "clear_companies_database"})
+        
+        cur.close()
+        conn.close()
+        
+        return JSONResponse({
+            "success": True,
+            "message": "All companies cleared from database"
+        })
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "message": f"Error clearing database: {str(e)}"
+        }, status_code=500)
+
 @app.post("/admin/users/toggle-status/{user_id}")
 async def toggle_user_status(
     user_id: int,
@@ -508,19 +538,19 @@ async def toggle_user_status(
     # Prevent admin from deactivating themselves
     if user_id == admin["user_id"]:
         return RedirectResponse(url="/admin/users?error=Cannot deactivate your own account", status_code=HTTP_303_SEE_OTHER)
-    
+
     # Toggle status
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("UPDATE users SET is_active = NOT is_active WHERE id = %s RETURNING is_active", (user_id,))
     new_status = cur.fetchone()[0]
     conn.commit()
-    
+
     # Log activity
     log_user_activity(conn, admin["user_id"], ActivityType.USER_UPDATED, {"user_id": user_id, "action": "toggled_status", "new_status": new_status})
-    
+
     conn.close()
-    
+
     status_text = "activated" if new_status else "deactivated"
     return RedirectResponse(url=f"/admin/users?success=User {status_text} successfully", status_code=HTTP_303_SEE_OTHER)
 
@@ -533,18 +563,18 @@ async def reset_user_password(
     # Generate temporary password
     temp_password = secrets.token_urlsafe(12)
     hashed_password = get_password_hash(temp_password)
-    
+
     # Update password
     execute("UPDATE users SET hashed_password = %s WHERE id = %s", (hashed_password, user_id))
-    
+
     # Get user email
     user = fetch_one_dict("SELECT email FROM users WHERE id = %s", (user_id,))
-    
+
     # Log activity
     conn = get_db_connection()
     log_user_activity(conn, admin["user_id"], ActivityType.USER_UPDATED, {"user_id": user_id, "action": "password_reset"})
     conn.close()
-    
+
     # In production, you'd email this to the user. For now, show it to admin.
     return RedirectResponse(
         url=f"/admin/users?success=Password reset for {user['email']}. Temporary password: {temp_password}",
@@ -560,18 +590,18 @@ async def delete_user(
     # Prevent admin from deleting themselves
     if user_id == admin["user_id"]:
         return RedirectResponse(url="/admin/users?error=Cannot delete your own account", status_code=HTTP_303_SEE_OTHER)
-    
+
     # Get user email for logging
     user = fetch_one_dict("SELECT email FROM users WHERE id = %s", (user_id,))
-    
+
     # Delete user (cascade will handle user_activity)
     execute("DELETE FROM users WHERE id = %s", (user_id,))
-    
+
     # Log activity
     conn = get_db_connection()
     log_user_activity(conn, admin["user_id"], ActivityType.USER_DELETED, {"deleted_user_id": user_id, "email": user["email"]})
     conn.close()
-    
+
     return RedirectResponse(url="/admin/users?success=User deleted successfully", status_code=HTTP_303_SEE_OTHER)
 
 @app.get("/admin/api-keys")
@@ -583,21 +613,21 @@ async def admin_api_keys_page(request: Request, admin: dict = Depends(require_ad
         FROM api_credentials
         ORDER BY service_name
     """)
-    
+
     # Add masked keys for display
     for cred in credentials:
         if cred['api_key'] and len(cred['api_key']) > 8:
             cred['masked_key'] = '*' * (len(cred['api_key']) - 4) + cred['api_key'][-4:]
         else:
             cred['masked_key'] = '****'
-    
+
     # Parse query parameters for messages
     messages = []
     if request.query_params.get("success"):
         messages.append({"type": "success", "text": request.query_params.get("success")})
     if request.query_params.get("error"):
         messages.append({"type": "error", "text": request.query_params.get("error")})
-    
+
     csrf_token = generate_csrf_token()
     return templates.TemplateResponse("admin_api_keys.html", {
         "request": request,
@@ -616,7 +646,7 @@ async def update_api_key(
     """Update an API key."""
     if not api_key or not api_key.strip():
         return RedirectResponse(url="/admin/api-keys?error=API key cannot be empty", status_code=HTTP_303_SEE_OTHER)
-    
+
     # Update the API key
     conn = get_db_connection()
     cur = conn.cursor()
@@ -625,19 +655,19 @@ async def update_api_key(
         (api_key.strip(), admin["user_id"], credential_id)
     )
     result = cur.fetchone()
-    
+
     if not result:
         conn.close()
         return RedirectResponse(url="/admin/api-keys?error=API credential not found", status_code=HTTP_303_SEE_OTHER)
-    
+
     service_name = result[0]
     conn.commit()
-    
+
     # Log activity
     log_user_activity(conn, admin["user_id"], ActivityType.API_KEY_UPDATE, {"credential_id": credential_id, "service": service_name})
-    
+
     conn.close()
-    
+
     return RedirectResponse(url=f"/admin/api-keys?success={service_name} API key updated successfully", status_code=HTTP_303_SEE_OTHER)
 
 @app.post("/admin/api-keys/toggle/{credential_id}")
@@ -653,14 +683,14 @@ async def toggle_api_key_status(
         (credential_id,)
     )
     result = cur.fetchone()
-    
+
     if not result:
         conn.close()
         return RedirectResponse(url="/admin/api-keys?error=API credential not found", status_code=HTTP_303_SEE_OTHER)
-    
+
     new_status, service_name = result
     conn.commit()
-    
+
     # Log activity
     log_user_activity(conn, admin["user_id"], ActivityType.API_KEY_UPDATE, {
         "credential_id": credential_id,
@@ -668,9 +698,9 @@ async def toggle_api_key_status(
         "action": "toggled_status",
         "new_status": new_status
     })
-    
+
     conn.close()
-    
+
     status_text = "enabled" if new_status else "disabled"
     return RedirectResponse(url=f"/admin/api-keys?success={service_name} API key {status_text}", status_code=HTTP_303_SEE_OTHER)
 
@@ -679,9 +709,16 @@ async def toggle_api_key_status(
 # ============================================================================
 
 @app.get("/")
-async def root():
-    """Redirect root to dashboard."""
-    return RedirectResponse(url="/dashboard")
+async def root(current_user: Optional[dict] = Depends(get_current_user_optional)):
+    """
+    Redirect root to appropriate page based on authentication status.
+    - Authenticated users → /dashboard
+    - Unauthenticated users → /login
+    """
+    if current_user:
+        return RedirectResponse(url="/dashboard")
+    else:
+        return RedirectResponse(url="/login")
 
 @app.get("/dashboard")
 async def dashboard(request: Request, current_user: dict = Depends(get_current_active_user)):
@@ -689,11 +726,11 @@ async def dashboard(request: Request, current_user: dict = Depends(get_current_a
     is_admin = current_user.get("role") == "admin"
     user_id = None if is_admin else current_user["user_id"]
     stats = get_dashboard_stats(user_id, is_admin)
-    
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "stats": stats,
-        "current_user": current_user
+        "current_user": current_user,
+        "metabase_url": METABASE_URL
     })
 
 @app.get("/companies")
@@ -701,38 +738,39 @@ async def companies_page(request: Request, current_user: dict = Depends(get_curr
     """Companies export page."""
     is_admin = current_user.get("role") == "admin"
     user_id = None if is_admin else current_user["user_id"]
-    
+
     # Get stats for the page
     where_clause = "" if is_admin else "WHERE user_id = %s"
     params = () if is_admin else (user_id,)
-    
+
     conn = get_db_connection()
     cur = conn.cursor()
-    
+
     # Total companies
     cur.execute(f"SELECT COUNT(*) FROM companies {where_clause}", params)
     total_companies = cur.fetchone()[0]
-    
+
     # Enriched companies
     cur.execute(f"SELECT COUNT(*) FROM companies {where_clause} {'AND' if where_clause else 'WHERE'} enrichment_status = 'complete'", params)
     enriched_companies = cur.fetchone()[0]
-    
+
     # Scored companies
     cur.execute(f"SELECT COUNT(*) FROM companies {where_clause} {'AND' if where_clause else 'WHERE'} buyability_score IS NOT NULL", params)
     scored_companies = cur.fetchone()[0]
-    
+
     conn.close()
-    
+
     stats = {
         "total_companies": total_companies,
         "enriched_companies": enriched_companies,
         "scored_companies": scored_companies
     }
-    
+
     return templates.TemplateResponse("companies.html", {
         "request": request,
         "stats": stats,
-        "current_user": current_user
+        "current_user": current_user,
+        "metabase_url": METABASE_URL
     })
 
 @app.post("/companies/export/csv")
@@ -740,27 +778,27 @@ async def export_companies_csv(request: Request, current_user: dict = Depends(ge
     """Export companies as CSV."""
     is_admin = current_user.get("role") == "admin"
     user_id = None if is_admin else current_user["user_id"]
-    
+
     # Get filter from query params
     filter_type = request.query_params.get("filter", "all")
-    
+
     # Build query based on filter
     where_clauses = []
     params = []
-    
+
     if not is_admin:
         where_clauses.append("user_id = %s")
         params.append(user_id)
-    
+
     if filter_type == "top_scored":
         where_clauses.append("buyability_score >= 60")
     elif filter_type == "family_owned":
         where_clauses.append("is_family_owned = TRUE")
-    
+
     where_clause = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
-    
+
     sql = f"""
-        SELECT 
+        SELECT
             name, url, phone, address, city, state, zip,
             industry_tag, customer_type, revenue_estimate, buyability_score,
             is_family_owned, is_franchise, owner_name, owner_phone,
@@ -772,9 +810,9 @@ async def export_companies_csv(request: Request, current_user: dict = Depends(ge
         {where_clause}
         ORDER BY buyability_score DESC NULLS LAST, created_at DESC
     """
-    
+
     companies = fetch_all_dict(sql, tuple(params) if params else None)
-    
+
     # Create CSV in memory
     output = io.StringIO()
     if companies:
@@ -792,9 +830,9 @@ async def export_companies_csv(request: Request, current_user: dict = Depends(ge
                 else:
                     row[key] = value
             writer.writerow(row)
-    
+
     output.seek(0)
-    
+
     # Log export activity
     conn = get_db_connection()
     log_user_activity(conn, current_user["user_id"], ActivityType.EXPORT_DATA, {
@@ -803,9 +841,9 @@ async def export_companies_csv(request: Request, current_user: dict = Depends(ge
         "count": len(companies)
     })
     conn.close()
-    
+
     filename = f"companies_{filter_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-    
+
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
@@ -821,30 +859,30 @@ async def export_companies_excel(request: Request, current_user: dict = Depends(
         from openpyxl.styles import Font, PatternFill
     except ImportError:
         raise HTTPException(status_code=500, detail="Excel export requires openpyxl. Please install it: pip install openpyxl")
-    
+
     is_admin = current_user.get("role") == "admin"
     user_id = None if is_admin else current_user["user_id"]
-    
+
     # Get filter from query params
     filter_type = request.query_params.get("filter", "all")
-    
+
     # Build query based on filter
     where_clauses = []
     params = []
-    
+
     if not is_admin:
         where_clauses.append("user_id = %s")
         params.append(user_id)
-    
+
     if filter_type == "top_scored":
         where_clauses.append("buyability_score >= 60")
     elif filter_type == "family_owned":
         where_clauses.append("is_family_owned = TRUE")
-    
+
     where_clause = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
-    
+
     sql = f"""
-        SELECT 
+        SELECT
             name, url, phone, address, city, state, zip,
             industry_tag, customer_type, revenue_estimate, buyability_score,
             is_family_owned, is_franchise, owner_name, owner_phone,
@@ -856,18 +894,18 @@ async def export_companies_excel(request: Request, current_user: dict = Depends(
         {where_clause}
         ORDER BY buyability_score DESC NULLS LAST, created_at DESC
     """
-    
+
     companies = fetch_all_dict(sql, tuple(params) if params else None)
-    
+
     # Create Excel workbook
     wb = Workbook()
     ws = wb.active
     ws.title = "Companies"
-    
+
     # Header styling
     header_fill = PatternFill(start_color="4F46E5", end_color="4F46E5", fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF")
-    
+
     if companies:
         # Write headers
         headers = list(companies[0].keys())
@@ -875,7 +913,7 @@ async def export_companies_excel(request: Request, current_user: dict = Depends(
             cell = ws.cell(row=1, column=col_num, value=header)
             cell.fill = header_fill
             cell.font = header_font
-        
+
         # Write data
         for row_num, company in enumerate(companies, 2):
             for col_num, header in enumerate(headers, 1):
@@ -887,7 +925,7 @@ async def export_companies_excel(request: Request, current_user: dict = Depends(
                 elif isinstance(value, (dict, list)):
                     value = str(value)
                 ws.cell(row=row_num, column=col_num, value=value)
-        
+
         # Auto-adjust column widths
         for column in ws.columns:
             max_length = 0
@@ -900,12 +938,12 @@ async def export_companies_excel(request: Request, current_user: dict = Depends(
                     pass
             adjusted_width = min(max_length + 2, 50)
             ws.column_dimensions[column_letter].width = adjusted_width
-    
+
     # Save to bytes
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
-    
+
     # Log export activity
     conn = get_db_connection()
     log_user_activity(conn, current_user["user_id"], ActivityType.EXPORT_DATA, {
@@ -914,9 +952,9 @@ async def export_companies_excel(request: Request, current_user: dict = Depends(
         "count": len(companies)
     })
     conn.close()
-    
+
     filename = f"companies_{filter_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-    
+
     return StreamingResponse(
         io.BytesIO(output.getvalue()),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1012,13 +1050,16 @@ async def delete_all_queries(current_user: dict = Depends(get_current_active_use
 # PIPELINE EXECUTION ROUTES
 # ============================================================================
 
-def _run_step(step: str):
+def _run_step(step: str, user_id: int):
     """Background task to run pipeline step."""
-    if step == "discover": run_discover()
-    elif step == "enrich": run_enrich()
-    elif step == "score": run_score()
+    if step == "discover": 
+        run_discover(user_id)
+    elif step == "enrich": 
+        run_enrich()
+    elif step == "score": 
+        run_score()
     elif step == "full":
-        run_discover()
+        run_discover(user_id)
         run_enrich()
         run_score()
 
@@ -1030,15 +1071,15 @@ async def run_step(
 ):
     """Run pipeline step in background."""
     if step in {"discover", "enrich", "score", "full"}:
-        background_tasks.add_task(_run_step, step)
-        
+        background_tasks.add_task(_run_step, step, current_user["user_id"])
+
         # Log activity
         conn = get_db_connection()
         log_user_activity(conn, current_user["user_id"], ActivityType.DISCOVERY_RUN if step == "discover" else ActivityType.ENRICHMENT_RUN, {"step": step})
         conn.close()
-    
-    return RedirectResponse(url="/dashboard", status_code=HTTP_303_SEE_OTHER)
 
+    return RedirectResponse(url="/dashboard", status_code=HTTP_303_SEE_OTHER)
+    
 # ============================================================================
 # API ROUTES
 # ============================================================================
@@ -1071,3 +1112,47 @@ async def get_logs_stream(current_user: dict = Depends(get_current_active_user))
         lines = f.readlines()
         last_lines = [line.rstrip() for line in lines[-50:]]
     return JSONResponse({"lines": last_lines})
+
+@app.get("/api/pipeline/progress")
+async def get_pipeline_progress():
+    """Get current pipeline progress for UI."""
+    try:
+        progress_file = Path(__file__).resolve().parent.parent / "pipeline_progress.json"
+        if progress_file.exists():
+            with open(progress_file, "r") as f:
+                return json.load(f)
+        else:
+            return {
+                "stage": "idle",
+                "status": "idle",
+                "current": 0,
+                "total": 0,
+                "message": "System idle",
+                "updated_at": datetime.utcnow().isoformat()
+            }
+    except Exception as e:
+        logger.error(f"Failed to read progress: {e}")
+        return {
+            "stage": "error",
+            "status": "error",
+            "current": 0,
+            "total": 0,
+            "message": "Failed to read progress",
+            "updated_at": datetime.utcnow().isoformat()
+        }
+
+
+@app.get("/api/pipeline/logs/download")
+async def download_pipeline_logs(current_user: dict = Depends(get_current_active_user)):
+    """Download pipeline log file."""
+    from fastapi.responses import FileResponse
+
+    log_file = Path(__file__).resolve().parent.parent / "logs" / "pipeline.log"
+    if not log_file.exists():
+        raise HTTPException(status_code=404, detail="Log file not found")
+
+    return FileResponse(
+        log_file,
+        filename=f"pipeline_log_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.log",
+        media_type="text/plain"
+    )

@@ -7,7 +7,7 @@ import yaml
 from dotenv import load_dotenv
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
-from etl.utils.db import execute
+from etl.utils.db import execute, fetch_one_dict
 from etl.utils.state_manager import should_stop, set_running, clear_running
 from etl.utils.logger import setup_logger
 
@@ -30,7 +30,7 @@ def search_places_new(text_query: str, page_token: Optional[str] = None, region_
         "X-Goog-Api-Key": API_KEY,
         "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.websiteUri,places.nationalPhoneNumber,places.rating,places.userRatingCount"
     }
-    
+
     body = {"textQuery": text_query}
     if region_code: body["regionCode"] = region_code
     if page_token: body["pageToken"] = page_token
@@ -53,14 +53,25 @@ def generate_deterministic_id(website: str | None, name: str, address: str | Non
     unique_str = f"{(name or '').lower()}|{(address or '').lower()}"
     return str(uuid.uuid5(uuid.NAMESPACE_DNS, unique_str))
 
-def upsert_company(place: Dict[str, Any]) -> None:
+def get_admin_user_id() -> int:
+    """Get the admin user ID (or first user if no admin exists)."""
+    result = fetch_one_dict("SELECT id FROM users WHERE role = 'admin' ORDER BY created_at LIMIT 1")
+    if result:
+        return result['id']
+    # Fallback to first user if no admin
+    result = fetch_one_dict("SELECT id FROM users ORDER BY created_at LIMIT 1")
+    if result:
+        return result['id']
+    raise RuntimeError("No users found in database")
+
+def upsert_company(place: Dict[str, Any], user_id: int) -> None:
     name = (place.get("displayName") or {}).get("text")
     address = place.get("formattedAddress")
     website = place.get("websiteUri")
     phone = place.get("nationalPhoneNumber")
     rating = place.get("rating")
     reviews = place.get("userRatingCount")
-    
+
     city = state = zip_code = country = None
     if address and "," in address:
         parts = [p.strip() for p in address.split(",")]
@@ -78,22 +89,22 @@ def upsert_company(place: Dict[str, Any]) -> None:
         INSERT INTO companies (
             id, name, url, phone, address, city, state, zip, country,
             google_rating, google_reviews,
-            date_added, created_at, updated_at, enrichment_status
+            date_added, created_at, updated_at, enrichment_status, user_id
         )
         VALUES (
             %(id)s, %(name)s, %(url)s, %(phone)s, %(address)s,
             %(city)s, %(state)s, %(zip)s, %(country)s,
             %(rating)s, %(reviews)s,
-            CURRENT_DATE, NOW(), NOW(), 'pending'
+            CURRENT_DATE, NOW(), NOW(), 'pending', %(user_id)s
         )
-        ON CONFLICT (id) DO UPDATE SET 
+        ON CONFLICT (id) DO UPDATE SET
             updated_at = NOW(),
             url = COALESCE(companies.url, EXCLUDED.url),
             phone = COALESCE(companies.phone, EXCLUDED.phone),
             google_rating = COALESCE(EXCLUDED.google_rating, companies.google_rating),
             google_reviews = COALESCE(EXCLUDED.google_reviews, companies.google_reviews);
     """
-    
+
     params = {
         "id": cid,
         "name": name or website or "Unknown",
@@ -105,14 +116,23 @@ def upsert_company(place: Dict[str, Any]) -> None:
         "zip": zip_code,
         "country": country,
         "rating": rating,
-        "reviews": reviews
+        "reviews": reviews,
+        "user_id": user_id
     }
-    
+
     execute(sql, params)
 
-def run_discovery():
+def run_discovery(user_id: Optional[int] = None):
     try:
         set_running("Discovery")
+        
+        # Get user ID for discovered companies
+        if user_id is None:
+            user_id = get_admin_user_id()
+            logger.info(f"No user_id provided, using admin: {user_id}")
+        else:
+            logger.info(f"Discoveries will be assigned to user_id: {user_id}")
+        
         if not os.path.exists(SETTINGS_PATH): return
         with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
             queries = yaml.safe_load(f).get("discovery", {}).get("queries", [])
@@ -126,14 +146,14 @@ def run_discovery():
 
             text_query = q.get("text_query")
             limit = int(q.get("limit", 20))
-            
+
             if not text_query: continue
-            
+
             logger.info(f"Searching: {text_query} (Max: {limit})")
-            
+
             page_token = None
             count = 0
-            
+
             while True:
                 if should_stop(): break
                 if count >= limit: break
@@ -141,15 +161,15 @@ def run_discovery():
                 try:
                     data = search_places_new(text_query, page_token=page_token, region_code=q.get("region_code", "US"))
                     places = data.get("places", [])
-                    
+
                     if not places: break
 
                     remaining = limit - count
                     batch_to_process = places[:remaining]
-                    
+
                     for place in batch_to_process:
-                        upsert_company(place)
-                    
+                        upsert_company(place, user_id)
+
                     added = len(batch_to_process)
                     count += added
                     logger.info(f"Added {added} places (Total: {count}/{limit})")
@@ -158,7 +178,7 @@ def run_discovery():
 
                     page_token = data.get("nextPageToken")
                     if not page_token: break
-                    
+
                     time.sleep(2)
                 except Exception as e:
                     logger.error(f"Error: {e}")

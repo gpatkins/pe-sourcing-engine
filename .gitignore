@@ -13,3 +13,4 @@ logs/*
 
 # --- OS Junk ---
 .DS_Store
+pipeline_progress.json
