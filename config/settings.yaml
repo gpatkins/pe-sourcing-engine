@@ -40,4 +40,16 @@ enrichment:
     min_revenue: 1000000
     max_revenue: 50000000
 discovery:
-  queries: []
+  queries:
+  - label: roofing supplies in washington
+    text_query: roofing supplies in washington
+    region_code: US
+    limit: 1
+  - label: hvac tech in wyoming
+    text_query: hvac tech in wyoming
+    region_code: US
+    limit: 2
+  - label: hvac in utah
+    text_query: hvac in utah
+    region_code: US
+    limit: 1

@@ -61,23 +61,6 @@ except ImportError:
     def run_enrich(): pass
     def run_score(): pass
 
-# --- CONFIG & CITIES ---
-US_CITIES = [
-    ("Birmingham", "AL"), ("Anchorage", "AK"), ("Phoenix", "AZ"), ("Little Rock", "AR"),
-    ("Los Angeles", "CA"), ("Denver", "CO"), ("Bridgeport", "CT"), ("Wilmington", "DE"),
-    ("Jacksonville", "FL"), ("Atlanta", "GA"), ("Honolulu", "HI"), ("Boise", "ID"),
-    ("Chicago", "IL"), ("Indianapolis", "IN"), ("Des Moines", "IA"), ("Wichita", "KS"),
-    ("Louisville", "KY"), ("New Orleans", "LA"), ("Portland", "ME"), ("Baltimore", "MD"),
-    ("Boston", "MA"), ("Detroit", "MI"), ("Minneapolis", "MN"), ("Jackson", "MS"),
-    ("Kansas City", "MO"), ("Billings", "MT"), ("Omaha", "NE"), ("Las Vegas", "NV"),
-    ("Manchester", "NH"), ("Newark", "NJ"), ("Albuquerque", "NM"), ("New York", "NY"),
-    ("Charlotte", "NC"), ("Fargo", "ND"), ("Columbus", "OH"), ("Oklahoma City", "OK"),
-    ("Portland", "OR"), ("Philadelphia", "PA"), ("Providence", "RI"), ("Charleston", "SC"),
-    ("Sioux Falls", "SD"), ("Nashville", "TN"), ("Houston", "TX"), ("Salt Lake City", "UT"),
-    ("Burlington", "VT"), ("Virginia Beach", "VA"), ("Seattle", "WA"), ("Charleston", "WV"),
-    ("Milwaukee", "WI"), ("Cheyenne", "WY")
-]
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_PATH = BASE_DIR / "config" / "settings.yaml"
 ENV_PATH = BASE_DIR / "config" / "secrets.env"
@@ -1025,10 +1008,21 @@ async def generate_queries(
     limit: int = Form(20),
     current_user: dict = Depends(get_current_active_user)
 ):
-    """Generate discovery queries for all US cities."""
+    """Generate discovery queries for all active cities from database."""
     queries = get_discovery_queries()
     base = base_query.strip()
-    for city, state in US_CITIES:
+    
+    # Get active locations from database
+    active_locations = fetch_all_dict("""
+        SELECT city, state 
+        FROM scale_generator_config 
+        WHERE is_active = true 
+        ORDER BY state, city
+    """)
+    
+    for loc in active_locations:
+        city = loc['city']
+        state = loc['state']
         new_text = f"{base} in {city}, {state}"
         label = f"gen_{state}_{city}"
         queries.append({
@@ -1037,6 +1031,7 @@ async def generate_queries(
             "region_code": "US",
             "limit": limit
         })
+    
     update_discovery_queries(queries)
     return RedirectResponse(url="/discovery", status_code=HTTP_303_SEE_OTHER)
 
@@ -1045,6 +1040,122 @@ async def delete_all_queries(current_user: dict = Depends(get_current_active_use
     """Delete all discovery queries."""
     update_discovery_queries([])
     return RedirectResponse(url="/discovery", status_code=HTTP_303_SEE_OTHER)
+
+# ============================================================================
+# SCALE GENERATOR CONFIG API (v5.2)
+# ============================================================================
+
+@app.get("/api/scale-generator/locations")
+async def get_scale_generator_locations(current_user: dict = Depends(get_current_active_user)):
+    """Get all scale generator locations."""
+    try:
+        locations = fetch_all_dict("""
+            SELECT id, city, state, is_active, created_at
+            FROM scale_generator_config
+            ORDER BY state, city
+        """)
+        
+        # Convert datetime to string for JSON serialization
+        for loc in locations:
+            if loc.get('created_at'):
+                loc['created_at'] = loc['created_at'].isoformat()
+        
+        return JSONResponse({"success": True, "locations": locations})
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"ERROR in get_scale_generator_locations: {error_details}")
+        return JSONResponse({"success": False, "message": str(e)}, status_code=500)
+
+@app.post("/api/scale-generator/locations")
+async def add_scale_generator_location(
+    request: Request,
+    current_user: dict = Depends(get_current_active_user)
+):
+    """Add a new scale generator location."""
+    try:
+        data = await request.json()
+        city = data.get("city", "").strip()
+        state = data.get("state", "").strip().upper()
+        
+        if not city or not state:
+            return JSONResponse({"success": False, "message": "City and state are required"}, status_code=400)
+        
+        if len(state) != 2:
+            return JSONResponse({"success": False, "message": "State must be 2-letter code"}, status_code=400)
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            INSERT INTO scale_generator_config (city, state, is_active)
+            VALUES (%s, %s, true)
+            RETURNING id
+        """, (city, state))
+        
+        location_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return JSONResponse({"success": True, "message": "Location added", "id": location_id})
+    except Exception as e:
+        if "unique constraint" in str(e).lower():
+            return JSONResponse({"success": False, "message": "Location already exists"}, status_code=400)
+        return JSONResponse({"success": False, "message": str(e)}, status_code=500)
+
+
+@app.put("/api/scale-generator/locations/{location_id}")
+async def update_scale_generator_location(
+    location_id: int,
+    request: Request,
+    current_user: dict = Depends(get_current_active_user)
+):
+    """Update a scale generator location."""
+    try:
+        data = await request.json()
+        is_active = data.get("is_active")
+        
+        if is_active is None:
+            return JSONResponse({"success": False, "message": "is_active is required"}, status_code=400)
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            UPDATE scale_generator_config
+            SET is_active = %s, updated_at = NOW()
+            WHERE id = %s
+        """, (is_active, location_id))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return JSONResponse({"success": True, "message": "Location updated"})
+    except Exception as e:
+        return JSONResponse({"success": False, "message": str(e)}, status_code=500)
+
+
+@app.delete("/api/scale-generator/locations/{location_id}")
+async def delete_scale_generator_location(
+    location_id: int,
+    current_user: dict = Depends(get_current_active_user)
+):
+    """Delete a scale generator location."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("DELETE FROM scale_generator_config WHERE id = %s", (location_id,))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return JSONResponse({"success": True, "message": "Location deleted"})
+    except Exception as e:
+        return JSONResponse({"success": False, "message": str(e)}, status_code=500)
 
 # ============================================================================
 # PIPELINE EXECUTION ROUTES
