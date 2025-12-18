@@ -75,6 +75,8 @@ METABASE_URL = os.getenv("METABASE_URL", "http://localhost:3000")
 # --- FastAPI App ---
 app = FastAPI(title="DealGenome - PE Sourcing Engine v5.1")
 templates = Jinja2Templates(directory="api/templates")
+templates.env.auto_reload = True
+templates.env.cache_size = 0
 
 # Add current_user to all template contexts
 @app.middleware("http")
