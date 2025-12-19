@@ -30,7 +30,6 @@ class User(Base):
     
     # Relationships
     activities = relationship("UserActivity", back_populates="user", cascade="all, delete-orphan")
-    api_credential_updates = relationship("ApiCredential", back_populates="updated_by_user")
     
     # Add constraint for role validation
     __table_args__ = (
@@ -44,34 +43,6 @@ class User(Base):
     def is_admin(self):
         """Check if user has admin privileges."""
         return self.role == 'admin'
-
-
-class ApiCredential(Base):
-    """
-    Centralized API credential storage.
-    Only admins can view and update these credentials.
-    """
-    __tablename__ = 'api_credentials'
-    
-    id = Column(Integer, primary_key=True, index=True)
-    service_name = Column(String(100), unique=True, nullable=False, index=True)
-    api_key = Column(Text, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    updated_by = Column(Integer, ForeignKey('users.id'), nullable=True)
-    
-    # Relationship
-    updated_by_user = relationship("User", back_populates="api_credential_updates")
-    
-    def __repr__(self):
-        return f"<ApiCredential(service='{self.service_name}', active={self.is_active})>"
-    
-    @property
-    def masked_key(self):
-        """Return masked API key for display (shows only last 4 characters)."""
-        if not self.api_key or len(self.api_key) < 8:
-            return "****"
-        return f"{'*' * (len(self.api_key) - 4)}{self.api_key[-4:]}"
 
 
 class UserActivity(Base):
@@ -102,8 +73,10 @@ class ActivityType:
     DISCOVERY_RUN = "discovery_run"
     ENRICHMENT_RUN = "enrichment_run"
     EXPORT_DATA = "export_data"
-    API_KEY_UPDATE = "api_key_update"
     USER_CREATED = "user_created"
     USER_UPDATED = "user_updated"
     USER_DELETED = "user_deleted"
     PASSWORD_CHANGED = "password_changed"
+    ENV_VAR_UPDATE = "env_var_update"
+    SYSTEM_CLEANUP = "system_cleanup"
+    APP_RESTART = "app_restart"

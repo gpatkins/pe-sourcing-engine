@@ -10,6 +10,8 @@ import os
 import secrets
 import csv
 import io
+import subprocess
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
@@ -447,7 +449,7 @@ async def change_password(
 
 @app.get("/admin/users")
 async def admin_users_page(request: Request, admin: dict = Depends(require_admin)):
-    """Admin user management page."""
+    """Admin user management page with environment variables and system tools."""
     # Get all users with company counts
     users = fetch_all_dict("""
     SELECT
@@ -588,106 +590,6 @@ async def delete_user(
     conn.close()
 
     return RedirectResponse(url="/admin/users?success=User deleted successfully", status_code=HTTP_303_SEE_OTHER)
-
-@app.get("/admin/api-keys")
-async def admin_api_keys_page(request: Request, admin: dict = Depends(require_admin)):
-    """Admin API keys management page."""
-    # Get all API credentials
-    credentials = fetch_all_dict("""
-        SELECT id, service_name, api_key, is_active, updated_at, updated_by
-        FROM api_credentials
-        ORDER BY service_name
-    """)
-
-    # Add masked keys for display
-    for cred in credentials:
-        if cred['api_key'] and len(cred['api_key']) > 8:
-            cred['masked_key'] = '*' * (len(cred['api_key']) - 4) + cred['api_key'][-4:]
-        else:
-            cred['masked_key'] = '****'
-
-    # Parse query parameters for messages
-    messages = []
-    if request.query_params.get("success"):
-        messages.append({"type": "success", "text": request.query_params.get("success")})
-    if request.query_params.get("error"):
-        messages.append({"type": "error", "text": request.query_params.get("error")})
-
-    csrf_token = generate_csrf_token()
-    return templates.TemplateResponse("admin_api_keys.html", {
-        "request": request,
-        "credentials": credentials,
-        "csrf_token": csrf_token,
-        "current_user": admin,
-        "messages": messages if messages else None
-    })
-
-@app.post("/admin/api-keys/update/{credential_id}")
-async def update_api_key(
-    credential_id: int,
-    api_key: str = Form(...),
-    admin: dict = Depends(require_admin)
-):
-    """Update an API key."""
-    if not api_key or not api_key.strip():
-        return RedirectResponse(url="/admin/api-keys?error=API key cannot be empty", status_code=HTTP_303_SEE_OTHER)
-
-    # Update the API key
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute(
-        "UPDATE api_credentials SET api_key = %s, updated_at = NOW(), updated_by = %s WHERE id = %s RETURNING service_name",
-        (api_key.strip(), admin["user_id"], credential_id)
-    )
-    result = cur.fetchone()
-
-    if not result:
-        conn.close()
-        return RedirectResponse(url="/admin/api-keys?error=API credential not found", status_code=HTTP_303_SEE_OTHER)
-
-    service_name = result[0]
-    conn.commit()
-
-    # Log activity
-    log_user_activity(conn, admin["user_id"], ActivityType.API_KEY_UPDATE, {"credential_id": credential_id, "service": service_name})
-
-    conn.close()
-
-    return RedirectResponse(url=f"/admin/api-keys?success={service_name} API key updated successfully", status_code=HTTP_303_SEE_OTHER)
-
-@app.post("/admin/api-keys/toggle/{credential_id}")
-async def toggle_api_key_status(
-    credential_id: int,
-    admin: dict = Depends(require_admin)
-):
-    """Toggle API key active/inactive status."""
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute(
-        "UPDATE api_credentials SET is_active = NOT is_active WHERE id = %s RETURNING is_active, service_name",
-        (credential_id,)
-    )
-    result = cur.fetchone()
-
-    if not result:
-        conn.close()
-        return RedirectResponse(url="/admin/api-keys?error=API credential not found", status_code=HTTP_303_SEE_OTHER)
-
-    new_status, service_name = result
-    conn.commit()
-
-    # Log activity
-    log_user_activity(conn, admin["user_id"], ActivityType.API_KEY_UPDATE, {
-        "credential_id": credential_id,
-        "service": service_name,
-        "action": "toggled_status",
-        "new_status": new_status
-    })
-
-    conn.close()
-
-    status_text = "enabled" if new_status else "disabled"
-    return RedirectResponse(url=f"/admin/api-keys?success={service_name} API key {status_text}", status_code=HTTP_303_SEE_OTHER)
 
 # ============================================================================
 # DASHBOARD ROUTES (Protected)
@@ -1269,3 +1171,285 @@ async def download_pipeline_logs(current_user: dict = Depends(get_current_active
         filename=f"pipeline_log_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.log",
         media_type="text/plain"
     )
+
+# ============================================================================
+# ADMIN: ENVIRONMENT VARIABLES & SYSTEM MANAGEMENT (v5.3)
+# ============================================================================
+
+@app.post("/admin/env-vars/update")
+async def update_env_vars(
+    request: Request,
+    google_places_api_key: str = Form(""),
+    google_gemini_api_key: str = Form(""),
+    serper_api_key: str = Form(""),
+    metabase_url: str = Form(""),
+    admin: dict = Depends(require_admin)
+):
+    """Update environment variables in secrets.env file."""
+    try:
+        env_path = BASE_DIR / "config" / "secrets.env"
+        
+        # Read existing .env file or create new one
+        env_vars = {}
+        if env_path.exists():
+            with open(env_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, value = line.split('=', 1)
+                        env_vars[key.strip()] = value.strip()
+        
+        # Update only non-empty values
+        updated_keys = []
+        if google_places_api_key.strip():
+            env_vars['GOOGLE_PLACES_API_KEY'] = google_places_api_key.strip()
+            updated_keys.append('GOOGLE_PLACES_API_KEY')
+        
+        if google_gemini_api_key.strip():
+            env_vars['GOOGLE_GEMINI_API_KEY'] = google_gemini_api_key.strip()
+            env_vars['GEMINI_API_KEY'] = google_gemini_api_key.strip()  # Compatibility
+            updated_keys.append('GOOGLE_GEMINI_API_KEY')
+        
+        if serper_api_key.strip():
+            env_vars['SERPER_API_KEY'] = serper_api_key.strip()
+            updated_keys.append('SERPER_API_KEY')
+        
+        if metabase_url.strip():
+            env_vars['METABASE_URL'] = metabase_url.strip()
+            updated_keys.append('METABASE_URL')
+        
+        if not updated_keys:
+            return RedirectResponse(
+                url="/admin/users?error=No environment variables were updated (all fields were empty)", 
+                status_code=HTTP_303_SEE_OTHER
+            )
+        
+        # Write updated .env file
+        with open(env_path, 'w', encoding='utf-8') as f:
+            f.write("# PE Sourcing Engine - Environment Variables\n")
+            f.write(f"# Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"# Updated by: {admin['email']}\n\n")
+            
+            for key, value in sorted(env_vars.items()):
+                f.write(f"{key}={value}\n")
+        
+        # Log activity
+        conn = get_db_connection()
+        log_user_activity(conn, admin["user_id"], ActivityType.ENV_VAR_UPDATE, {
+            "updated_keys": updated_keys,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        conn.close()
+        
+        # Reload environment variables
+        load_dotenv(env_path, override=True)
+        
+        success_msg = f"Environment variables updated: {', '.join(updated_keys)}. Restart the application to apply changes."
+        return RedirectResponse(
+            url=f"/admin/users?success={success_msg}", 
+            status_code=HTTP_303_SEE_OTHER
+        )
+        
+    except Exception as e:
+        return RedirectResponse(
+            url=f"/admin/users?error=Failed to update environment variables: {str(e)}", 
+            status_code=HTTP_303_SEE_OTHER
+        )
+
+@app.post("/admin/system/cleanup")
+async def system_cleanup(
+    request: Request,
+    admin: dict = Depends(require_admin)
+):
+    """Run system cleanup script to free memory and resources."""
+    try:
+        cleanup_script = BASE_DIR / "clean.sh"
+        
+        if not cleanup_script.exists():
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "success": False,
+                    "message": "Cleanup script not found at /opt/pe-sourcing-engine/clean.sh"
+                }
+            )
+        
+        # Make script executable
+        os.chmod(cleanup_script, 0o755)
+        
+        # Run cleanup script using shell=True to ensure bash is found
+        result = subprocess.run(
+            f'/bin/bash {cleanup_script}',
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        
+        # Log activity
+        conn = get_db_connection()
+        log_user_activity(conn, admin["user_id"], ActivityType.SYSTEM_CLEANUP, {
+            "timestamp": datetime.utcnow().isoformat(),
+            "exit_code": result.returncode,
+            "success": result.returncode == 0
+        })
+        conn.close()
+        
+        if result.returncode == 0:
+            return JSONResponse(content={
+                "success": True,
+                "message": "System cleanup completed successfully",
+                "output": result.stdout,
+                "timestamp": datetime.utcnow().isoformat()
+            })
+        else:
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "success": False,
+                    "message": "System cleanup failed",
+                    "error": result.stderr,
+                    "output": result.stdout
+                }
+            )
+            
+    except subprocess.TimeoutExpired:
+        return JSONResponse(
+            status_code=504,
+            content={
+                "success": False,
+                "message": "System cleanup timed out after 60 seconds"
+            }
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "message": f"System cleanup error: {str(e)}"
+            }
+        )
+
+@app.post("/admin/app/restart")
+async def restart_application(
+    request: Request,
+    admin: dict = Depends(require_admin)
+):
+    """Restart the application (auto-detects development vs production environment)."""
+    try:
+        # Detect environment - PRIORITY ORDER MATTERS
+        # 1. Check if systemd service exists (development/dg server)
+        # 2. Check if actually running inside Docker container (production/docker-dg)
+        
+        environment = "unknown"
+        restart_command = None
+        
+        # First check: Is there a systemd service? (PRIORITY)
+        is_systemd = os.path.exists('/etc/systemd/system/pe-sourcing-gui.service') or \
+                     os.path.exists('/lib/systemd/system/pe-sourcing-gui.service')
+        
+        # Second check: Are we ACTUALLY running inside a Docker container?
+        # (not just having docker-compose.yml in the project directory)
+        is_inside_docker = os.path.exists('/.dockerenv') or \
+                          (os.path.exists('/proc/1/cgroup') and 
+                           any('docker' in line for line in open('/proc/1/cgroup', 'r').readlines()))
+        
+        # Determine environment and restart command (systemd takes priority)
+        if is_systemd and not is_inside_docker:
+            # Development server with systemd service
+            environment = "systemd"
+            restart_command = "sudo systemctl restart pe-sourcing-gui.service"
+        elif is_inside_docker:
+            # Production server running inside Docker
+            environment = "docker"
+            restart_command = "sudo docker compose restart app"
+        else:
+            # Fallback: try to detect from running processes
+            try:
+                result = subprocess.run(
+                    "systemctl is-active pe-sourcing-gui.service",
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    # systemd service is active
+                    environment = "systemd"
+                    restart_command = "sudo systemctl restart pe-sourcing-gui.service"
+                else:
+                    # Assume Docker if systemd service not found
+                    environment = "docker"
+                    restart_command = "sudo docker compose restart app"
+            except:
+                # Final fallback - default to systemd as it's more common
+                environment = "systemd"
+                restart_command = "sudo systemctl restart pe-sourcing-gui.service"
+        
+        if not restart_command:
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "success": False,
+                    "message": "Could not detect environment (neither Docker nor systemd found)",
+                    "environment": environment
+                }
+            )
+        
+        # Log activity BEFORE restart (since we won't be able to after)
+        conn = get_db_connection()
+        log_user_activity(conn, admin["user_id"], ActivityType.APP_RESTART, {
+            "timestamp": datetime.utcnow().isoformat(),
+            "environment": environment,
+            "command": restart_command
+        })
+        conn.close()
+        
+        # SIMPLEST POSSIBLE SOLUTION: Use a systemd oneshot service
+        # We'll trigger pe-sourcing-restart-helper.service which waits 3 seconds then restarts
+        
+        debug_log = "/tmp/pe_restart_debug.log"
+        with open(debug_log, 'a') as f:
+            f.write(f"\n=== RESTART ENDPOINT CALLED at {datetime.utcnow()} ===\n")
+            f.write(f"Environment: {environment}\n")
+            f.write(f"Command: {restart_command}\n")
+            f.write(f"User: {admin.get('email', 'unknown')}\n")
+            f.write(f"Method: Triggering systemd restart helper service\n")
+        
+        # Simply start the restart helper service - systemd will handle everything
+        try:
+            # Use 'at' with shortest possible delay
+            # Note: 'at' doesn't support seconds, minimum is 1 minute
+            result = subprocess.run(
+                ['/usr/bin/at', 'now + 1 minute'],
+                input=restart_command,
+                capture_output=True,
+                text=True,
+                timeout=2
+            )
+            with open(debug_log, 'a') as f:
+                f.write(f"At command exit code: {result.returncode}\n")
+                f.write(f"Stdout: {result.stdout}\n")
+                f.write(f"Stderr: {result.stderr}\n")
+        except Exception as e:
+            with open(debug_log, 'a') as f:
+                f.write(f"Error: {e}\n")
+        
+        return JSONResponse(content={
+            "success": True,
+            "message": f"Application restart scheduled ({environment} environment)",
+            "environment": environment,
+            "command": restart_command,
+            "timestamp": datetime.utcnow().isoformat(),
+            "note": "Restart will occur in 1 minute. Page will become unavailable briefly. Please wait and refresh."
+        })
+            
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "message": f"Application restart error: {str(e)}"
+            }
+        )
+

@@ -1,5 +1,5 @@
 -- PE Sourcing Engine v5.1 - User Authentication & Multi-Tenancy Migration
--- This migration adds user management, role-based access control, and API credential management
+-- This migration adds user management, role-based access control
 
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
@@ -11,16 +11,6 @@ CREATE TABLE IF NOT EXISTS users (
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW(),
     last_login TIMESTAMP
-);
-
--- Create API credentials table (admin-managed)
-CREATE TABLE IF NOT EXISTS api_credentials (
-    id SERIAL PRIMARY KEY,
-    service_name VARCHAR(100) UNIQUE NOT NULL,
-    api_key TEXT NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE,
-    updated_at TIMESTAMP DEFAULT NOW(),
-    updated_by INT REFERENCES users(id)
 );
 
 -- Create user activity tracking table
@@ -80,14 +70,6 @@ VALUES (
 )
 ON CONFLICT (email) DO NOTHING;
 
--- Insert initial API credential placeholders (admin will update these)
-INSERT INTO api_credentials (service_name, api_key, is_active, updated_by)
-VALUES 
-    ('google_places', 'YOUR_GOOGLE_PLACES_API_KEY', TRUE, 1),
-    ('google_gemini', 'YOUR_GEMINI_API_KEY', TRUE, 1),
-    ('serper', 'YOUR_SERPER_API_KEY', TRUE, 1)
-ON CONFLICT (service_name) DO NOTHING;
-
 -- Create a view for user statistics (useful for dashboard)
 CREATE OR REPLACE VIEW user_stats AS
 SELECT 
@@ -106,9 +88,8 @@ GROUP BY u.id, u.email, u.full_name, u.role, u.last_login, u.created_at;
 
 -- Add comment documentation
 COMMENT ON TABLE users IS 'User authentication and authorization table';
-COMMENT ON TABLE api_credentials IS 'Centralized API key storage (admin-managed)';
 COMMENT ON TABLE user_activity IS 'Audit log for user actions';
-COMMENT ON COLUMN users.role IS 'admin: full access, can manage users and API keys | user: can discover and view own companies';
+COMMENT ON COLUMN users.role IS 'admin: full access, can manage users | user: can discover and view own companies';
 COMMENT ON COLUMN companies.user_id IS 'Links company to the user who discovered it (data isolation)';
 
 -- Migration complete
