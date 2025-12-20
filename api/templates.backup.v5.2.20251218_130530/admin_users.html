@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}User Management{% endblock %}
+
+{% block content %}
+<div class="py-10">
+    <header class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="md:flex md:items-center md:justify-between">
+            <div class="min-w-0 flex-1">
+                <h1 class="text-3xl font-bold tracking-tight text-gray-900">User Management</h1>
+                <p class="mt-2 text-sm text-gray-700">Manage system users and their permissions</p>
+            </div>
+            <div class="mt-4 flex md:ml-4 md:mt-0">
+                <a href="/register" 
+                   class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+                    <svg class="-ml-0.5 mr-1.5 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
+                    </svg>
+                    Create User
+                </a>
+            </div>
+        </div>
+    </header>
+    
+    <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-8">
+        <!-- Users Table -->
+        <div class="bg-white shadow sm:rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <div class="flow-root">
+                    <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+                        <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+                            <table class="min-w-full divide-y divide-gray-300">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-0">User</th>
+                                        <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Role</th>
+                                        <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Status</th>
+                                        <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Companies</th>
+                                        <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Last Login</th>
+                                        <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Created</th>
+                                        <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-0">
+                                            <span class="sr-only">Actions</span>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200">
+                                    {% for user in users %}
+                                    <tr>
+                                        <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm sm:pl-0">
+                                            <div class="flex items-center">
+                                                <div class="h-10 w-10 flex-shrink-0">
+                                                    <div class="h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-medium">
+                                                        {{ user.email[0]|upper }}
+                                                    </div>
+                                                </div>
+                                                <div class="ml-4">
+                                                    <div class="font-medium text-gray-900">{{ user.full_name or 'N/A' }}</div>
+                                                    <div class="text-gray-500">{{ user.email }}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                                            <span class="inline-flex items-center rounded-md {% if user.role == 'admin' %}bg-purple-50 text-purple-700 ring-purple-700/10{% else %}bg-blue-50 text-blue-700 ring-blue-700/10{% endif %} px-2 py-1 text-xs font-medium ring-1 ring-inset">
+                                                {{ user.role|capitalize }}
+                                            </span>
+                                        </td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                                            <span class="inline-flex items-center rounded-md {% if user.is_active %}bg-green-50 text-green-700 ring-green-600/20{% else %}bg-gray-50 text-gray-600 ring-gray-500/10{% endif %} px-2 py-1 text-xs font-medium ring-1 ring-inset">
+                                                {% if user.is_active %}Active{% else %}Inactive{% endif %}
+                                            </span>
+                                        </td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                                            {{ user.company_count or 0 }}
+                                        </td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                                            {% if user.last_login %}
+                                                <span title="{{ user.last_login.strftime('%Y-%m-%d %H:%M:%S') }}">
+                                                    {{ user.last_login.strftime('%b %d, %Y') }}
+                                                </span>
+                                            {% else %}
+                                                <span class="text-gray-400">Never</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                                            {{ user.created_at.strftime('%b %d, %Y') if user.created_at else 'N/A' }}
+                                        </td>
+                                        <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0">
+                                            <div class="flex justify-end gap-2">
+                                                {% if user.id != current_user.user_id %}
+                                                <!-- Toggle Active/Inactive -->
+                                                <form action="/admin/users/toggle-status/{{ user.id }}" method="POST" class="inline">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                                    <button type="submit" 
+                                                            class="text-indigo-600 hover:text-indigo-900"
+                                                            title="{% if user.is_active %}Deactivate{% else %}Activate{% endif %} user">
+                                                        {% if user.is_active %}
+                                                        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                            <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                                                        </svg>
+                                                        {% else %}
+                                                        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                            <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" />
+                                                        </svg>
+                                                        {% endif %}
+                                                    </button>
+                                                </form>
+                                                
+                                                <!-- Reset Password -->
+                                                <form action="/admin/users/reset-password/{{ user.id }}" method="POST" class="inline" 
+                                                      onsubmit="return confirm('Reset password for {{ user.email }}? A temporary password will be generated.');">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                                    <button type="submit" 
+                                                            class="text-yellow-600 hover:text-yellow-900"
+                                                            title="Reset password">
+                                                        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                            <path fill-rule="evenodd" d="M10 1a4.5 4.5 0 0 0-4.5 4.5V9H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-.5V5.5A4.5 4.5 0 0 0 10 1Zm3 8V5.5a3 3 0 1 0-6 0V9h6Z" clip-rule="evenodd" />
+                                                        </svg>
+                                                    </button>
+                                                </form>
+                                                
+                                                <!-- Delete User -->
+                                                <form action="/admin/users/delete/{{ user.id }}" method="POST" class="inline" 
+                                                      onsubmit="return confirm('Delete user {{ user.email }}? This action cannot be undone.');">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                                    <button type="submit" 
+                                                            class="text-red-600 hover:text-red-900"
+                                                            title="Delete user">
+                                                        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                            <path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clip-rule="evenodd" />
+                                                        </svg>
+                                                    </button>
+                                                </form>
+                                                {% else %}
+                                                <span class="text-gray-400 text-xs">(You)</span>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                    
+                                    {% if not users %}
+                                    <tr>
+                                        <td colspan="7" class="py-10 text-center text-sm text-gray-500">
+                                            No users found. Create your first user to get started.
+                                        </td>
+                                    </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Activity -->
+        <div class="mt-8 bg-white shadow sm:rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-base font-semibold leading-6 text-gray-900 mb-4">Recent User Activity</h3>
+                <div class="flow-root">
+                    <ul role="list" class="-mb-8">
+                        {% for activity in recent_activity %}
+                        <li>
+                            <div class="relative pb-8">
+                                {% if not loop.last %}
+                                <span class="absolute left-4 top-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true"></span>
+                                {% endif %}
+                                <div class="relative flex space-x-3">
+                                    <div>
+                                        <span class="h-8 w-8 rounded-full bg-indigo-500 flex items-center justify-center ring-8 ring-white">
+                                            <svg class="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M10 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-7 9a7 7 0 1 1 14 0H3Z" clip-rule="evenodd" />
+                                            </svg>
+                                        </span>
+                                    </div>
+                                    <div class="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
+                                        <div>
+                                            <p class="text-sm text-gray-500">
+                                                <span class="font-medium text-gray-900">{{ activity.user_email }}</span>
+                                                {{ activity.activity_type|replace('_', ' ')|title }}
+                                            </p>
+                                        </div>
+                                        <div class="whitespace-nowrap text-right text-sm text-gray-500">
+                                            <time datetime="{{ activity.created_at.isoformat() }}">{{ activity.created_at.strftime('%b %d, %I:%M %p') }}</time>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </li>
+                        {% endfor %}
+                        
+                        {% if not recent_activity %}
+                        <li class="text-center text-sm text-gray-500 py-4">
+                            No recent activity
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}

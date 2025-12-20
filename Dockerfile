@@ -1,14 +1,14 @@
-# PE Sourcing Engine v5.1 - Docker Image
+# PE Sourcing Engine v5.3 - Docker Image
 # Multi-user SaaS platform with JWT authentication
 
 # DOWNGRADED to 3.13 to fix SQLAlchemy 2.0.35 compatibility issue
 FROM python:3.13-slim
 
 LABEL maintainer="Gabriel Atkinson"
-LABEL version="5.1"
+LABEL version="5.3"
 LABEL description="PE Sourcing Engine - Automated Deal Origination Platform"
 
-# System dependencies for PostgreSQL, XML parsing, and compilation
+# System dependencies for PostgreSQL, XML parsing, compilation, and 'at' command
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
@@ -16,7 +16,13 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     libxslt-dev \
     curl \
+    at \
     && rm -rf /var/lib/apt/lists/*
+
+# Start atd service for 'at' command
+RUN mkdir -p /var/run && \
+    echo '#!/bin/sh\natd &\nexec "$@"' > /entrypoint.sh && \
+    chmod +x /entrypoint.sh
 
 # Create app directory
 WORKDIR /app
@@ -38,6 +44,9 @@ EXPOSE 8000
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/api/status || exit 1
+
+# Use entrypoint to start atd service
+ENTRYPOINT ["/entrypoint.sh"]
 
 # Run the application
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
