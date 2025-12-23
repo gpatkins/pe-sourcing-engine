@@ -45,3 +45,7 @@ discovery:
     text_query: plumbing service in arizona
     region_code: US
     limit: 1
+  - label: hvac service in utah
+    text_query: hvac service in utah
+    region_code: US
+    limit: 1
