@@ -201,7 +201,7 @@ DOMAIN={config.get('domain', '')}
 
 def main():
     print("\n" + "="*60)
-    print("   PE Sourcing Engine v5.3 - Interactive Installer")
+    print("   PE Sourcing Engine v5.5 - Interactive Installer")
     print("   Multi-User SaaS Platform with JWT Authentication")
     print("="*60 + "\n")
     
@@ -362,7 +362,7 @@ METABASE_URL=http://metabase:3000
         print(f"  View status:   {compose_cmd} ps")
         
         print("\n📚 Documentation:")
-        print("  README:        README-DOCKER.md")
+        print("  README:        docker-README.md")
         print("  GitHub:        https://github.com/gpatkins/pe-sourcing-engine")
         
         print("\n" + "="*60 + "\n")
