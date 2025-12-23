@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [5.5.0] - 2024-12-23
+## [5.5.0] - 2025-12-23
 
 ### Added
 - Schema directory with organized database documentation (`schema/`)

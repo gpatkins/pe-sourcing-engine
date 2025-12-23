@@ -49,3 +49,7 @@ discovery:
     text_query: hvac service in utah
     region_code: US
     limit: 1
+  - label: home school enrichment in utah
+    text_query: home school enrichment in utah
+    region_code: US
+    limit: 1
