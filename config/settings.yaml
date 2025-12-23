@@ -41,11 +41,7 @@ enrichment:
     max_revenue: 50000000
 discovery:
   queries:
-  - label: hvac tech service in north dakota
-    text_query: hvac tech service in north dakota
+  - label: plumbing service in arizona
+    text_query: plumbing service in arizona
     region_code: US
     limit: 1
-  - label: HVAC in salt lake city
-    text_query: HVAC in salt lake city
-    region_code: US
-    limit: 3

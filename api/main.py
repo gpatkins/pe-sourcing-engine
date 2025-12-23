@@ -1,5 +1,5 @@
 """
-PE Sourcing Engine v5.1 - FastAPI Dashboard
+PE Sourcing Engine v5.4 - FastAPI Dashboard
 Main API application with JWT-based authentication and user management.
 """
 
@@ -18,6 +18,8 @@ from datetime import datetime, timedelta
 
 import yaml
 from dotenv import load_dotenv
+
+from api.version import __version__ as APP_VERSION
 from fastapi import (
     BackgroundTasks,
     Cookie,
@@ -35,7 +37,7 @@ from starlette.status import HTTP_303_SEE_OTHER
 from etl.utils.state_manager import get_current_state, request_stop
 from etl.utils.db import get_db_connection, fetch_all_dict, fetch_one_dict, execute
 
-# Authentication imports (v5.1)
+# Authentication imports
 from api.auth import (
     verify_password,
     get_password_hash,
@@ -75,8 +77,9 @@ load_dotenv(ENV_PATH)
 METABASE_URL = os.getenv("METABASE_URL", "http://localhost:3000")
 
 # --- FastAPI App ---
-app = FastAPI(title="DealGenome - PE Sourcing Engine v5.1")
+app = FastAPI(title=f"DealGenome - PE Sourcing Engine v{APP_VERSION}")
 templates = Jinja2Templates(directory="api/templates")
+templates.env.globals["app_version"] = APP_VERSION
 templates.env.auto_reload = True
 templates.env.cache_size = 0
 
@@ -181,7 +184,7 @@ def get_user_stats(user_id: int) -> dict:
     return result or {"total_companies": 0, "companies_last_30_days": 0, "last_company_added": None}
 
 # ============================================================================
-# AUTHENTICATION ROUTES (v5.1)
+# AUTHENTICATION ROUTES
 # ============================================================================
 
 @app.get("/login")
@@ -444,7 +447,7 @@ async def change_password(
     return RedirectResponse(url="/profile?success=Password changed successfully", status_code=HTTP_303_SEE_OTHER)
 
 # ============================================================================
-# ADMIN ROUTES (v5.1)
+# ADMIN ROUTES
 # ============================================================================
 
 @app.get("/admin/users")
