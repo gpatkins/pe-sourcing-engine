@@ -1,23 +1,115 @@
-# --- Security (NEVER COMMIT THESE) ---
+# =============================================================================
+# PE Sourcing Engine / DealGenome - Git Ignore File
+# =============================================================================
+
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+pip-log.txt
+pip-delete-this-directory.txt
+
+# --- Virtual Environments ---
+venv/
+env/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+pythonenv*/
+
+# --- IDEs & Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# --- Testing & Coverage ---
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# --- Configuration & Secrets ---
 config/secrets.env
 config/generated_secrets.env
 .env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.crt
+*.csr
 
-# --- Heavy/Junk Folders ---
-venv/
-__pycache__/
-*.pyc
-logs/*
-*.log
-*.tar.gz
-
-# --- OS Junk ---
-.DS_Store
-pipeline_progress.json
-config/secrets.env
-
-# Logs
+# --- Logs ---
 logs/*.log
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
+# --- Database ---
+*.db
+*.sqlite
+*.sqlite3
+*.sql.backup
+*.dump
+pg_dump_*.sql
 
+# --- Project Specific ---
+pipeline_progress.json
+.DS_Store
+Thumbs.db
+
+# --- OS Files ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# --- Temporary Files ---
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+
+# --- Docker (keep tracked files) ---
+# Note: We keep docker-compose.yml, Dockerfile, etc.
+# Only ignore runtime artifacts:
+.dockerignore.backup
+
+# --- Documentation Build Artifacts ---
+docs/_build/
+site/
+
+# =============================================================================
+# END
+# =============================================================================
