@@ -10,7 +10,6 @@ services:
       POSTGRES_DB: ${DB_NAME:-pe_sourcing_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # v5.5: Schema consolidated into single authoritative file
       - ./schema/current.sql:/docker-entrypoint-initdb.d/01-schema.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pe_sourcer}"]
@@ -31,6 +30,9 @@ services:
       - ./config:/app/config
       - ./logs:/app/logs
       - app_data:/app/data
+    env_file:
+      - .env
+      - config/secrets.env
     environment:
       # Database
       DB_HOST: db
@@ -38,27 +40,26 @@ services:
       DB_NAME: ${DB_NAME:-pe_sourcing_db}
       DB_USER: ${DB_USER:-pe_sourcer}
       DB_PASS: ${DB_PASS:-changeme}
-
+      
       # Authentication (v5.1)
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-please-change-this-secret-key-in-production}
       CSRF_SECRET: ${CSRF_SECRET:-please-change-this-csrf-secret-in-production}
-
-      # API Keys - IMPORTANT: These are intentionally empty here
-      # They are loaded from config/secrets.env by the Python application
-      # Setting them here would override the secrets.env values with empty strings
-      GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY:-}
-      GOOGLE_GEMINI_API_KEY: ${GOOGLE_GEMINI_API_KEY:-}
-      GEMINI_API_KEY: ${GOOGLE_GEMINI_API_KEY:-}
-      SERPER_API_KEY: ${SERPER_API_KEY:-}
-
+      
+      # API Keys - Now loaded from both .env and config/secrets.env
+      # The config/secrets.env file is updated by the Admin UI
+      # These environment variable declarations ensure they're available in the container
+      GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY}
+      GOOGLE_GEMINI_API_KEY: ${GOOGLE_GEMINI_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      SERPER_API_KEY: ${SERPER_API_KEY}
+      
       # Optional
       AI_SERVER_URL: ${AI_SERVER_URL:-}
-
+      
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
-      # v5.6: Use /login instead of /api/status (which requires authentication)
       test: ["CMD", "curl", "-f", "http://localhost:8000/login"]
       interval: 30s
       timeout: 10s

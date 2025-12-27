@@ -3,7 +3,7 @@ import logging
 import time
 import random
 from typing import Any, Dict
-from ddgs import DDGS  # <--- FIXED IMPORT (No more warning)
+from duckduckgo_search import DDGS
 from .base import EnrichmentModule
 
 logger = logging.getLogger(__name__)
