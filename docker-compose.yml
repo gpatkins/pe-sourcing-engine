@@ -10,8 +10,7 @@ services:
       POSTGRES_DB: ${DB_NAME:-pe_sourcing_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
-      - ./schema_v5.1.sql:/docker-entrypoint-initdb.d/02-schema-v5.1.sql
+      - ./schema/current.sql:/docker-entrypoint-initdb.d/01-schema.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pe_sourcer}"]
       interval: 10s
