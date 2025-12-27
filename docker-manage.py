@@ -92,7 +92,7 @@ def header():
     status = get_status()
     dash, meta = get_urls()
     
-    print(f"{BOLD}*** PE Sourcing Engine | Management Console ***{RESET}")
+    print(f"{BOLD}*** PE Sourcing Engine v5.6 | Docker Management Console ***{RESET}")
     print(f"Server IP:   {BLUE}{ip}{RESET}")
     print(f"Status:      {status}")
     print(f"Location:    {APP_DIR}")

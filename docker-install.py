@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PE Sourcing Engine v5.5 - Interactive Installer
+PE Sourcing Engine v5.6 - Interactive Installer
 Walks users through Docker deployment setup
 """
 

@@ -1,4 +1,4 @@
-# PE Sourcing Engine v5.1 - Docker Deployment Guide
+# PE Sourcing Engine v5.6 - Docker Deployment Guide
 
 Complete containerized deployment of the PE Sourcing Engine with PostgreSQL, FastAPI, and Metabase.
 
@@ -398,7 +398,7 @@ docker compose up -d
 
 ---
 
-**Version:** 5.1  
+**Version:** 5.6  
 **Last Updated:** December 2025  
 **Maintainer:** Gabriel Atkinson  
 **Repository:** Private - Access required

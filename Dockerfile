@@ -1,11 +1,10 @@
-# PE Sourcing Engine v5.3 - Docker Image
-# Multi-user SaaS platform with JWT authentication
+# PE Sourcing Engine v5.6 - Docker Image
+# Multi-user SaaS platform with JWT authentication and Scale Generator
 
-# DOWNGRADED to 3.13 to fix SQLAlchemy 2.0.35 compatibility issue
 FROM python:3.13-slim
 
 LABEL maintainer="Gabriel Atkinson"
-LABEL version="5.3"
+LABEL version="5.6"
 LABEL description="PE Sourcing Engine - Automated Deal Origination Platform"
 
 # System dependencies for PostgreSQL, XML parsing, compilation, and 'at' command
@@ -19,7 +18,7 @@ RUN apt-get update && apt-get install -y \
     at \
     && rm -rf /var/lib/apt/lists/*
 
-# Start atd service for 'at' command
+# Start atd service for 'at' command (used for app restart functionality)
 RUN mkdir -p /var/run && \
     echo '#!/bin/sh\natd &\nexec "$@"' > /entrypoint.sh && \
     chmod +x /entrypoint.sh
@@ -41,9 +40,9 @@ RUN mkdir -p /app/logs /app/config
 # Expose port
 EXPOSE 8000
 
-# Health check
+# Health check - use /login instead of /api/status (which requires auth)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8000/api/status || exit 1
+    CMD curl -f http://localhost:8000/login || exit 1
 
 # Use entrypoint to start atd service
 ENTRYPOINT ["/entrypoint.sh"]
