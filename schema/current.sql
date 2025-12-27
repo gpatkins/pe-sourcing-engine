@@ -1,7 +1,7 @@
 -- =============================================================================
 -- DealGenome / PE Sourcing Engine - Database Schema
--- Version: 5.4 (Current)
--- Last Updated: December 2024
+-- Version: 5.5 (Current)
+-- Last Updated: December 2025
 -- =============================================================================
 -- This is the authoritative, complete schema for the PE Sourcing Engine.
 -- For historical migrations, see schema/migrations/
@@ -10,7 +10,6 @@
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
-SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SET search_path = public;
@@ -40,7 +39,7 @@ CREATE TABLE IF NOT EXISTS companies (
     legal_name text,
     url text,
     description text,
-    
+
     -- GROUP 2: LOCATION & CONTACT (Where are they?)
     phone text,
     address text,
@@ -48,7 +47,7 @@ CREATE TABLE IF NOT EXISTS companies (
     state text,
     zip text,
     country text,
-    
+
     -- GROUP 3: BUSINESS LOGIC (What do they do?)
     industry_tag text,          -- AI Derived (e.g. "Commercial HVAC")
     naics_code text,            -- AI Derived (e.g. "238220")
@@ -63,13 +62,13 @@ CREATE TABLE IF NOT EXISTS companies (
     revenue_estimate numeric,   -- Calculated Estimate
     employee_count integer,
     buyability_score smallint,  -- 0-100 Score
-    
+
     -- GROUP 5: OWNER & LEADERSHIP (Who owns it?)
     owner_name text,
     owner_phone text,
     founder_email text,
     owner_source text,          -- "Website" or "Serper Ghost Search"
-    
+
     -- GROUP 6: SOCIAL & WEB PRESENCE (Digital Footprint)
     linkedin_company_url text,
     owner_linkedin_url text,
@@ -78,20 +77,20 @@ CREATE TABLE IF NOT EXISTS companies (
     instagram_url text,
     twitter_url text,
     youtube_url text,
-    
+
     -- GROUP 7: TECH & METRICS (Sophistication)
     website_tech_stack jsonb,   -- ["Shopify", "Klaviyo"]
     google_rating numeric,
     google_reviews integer,
-    
+
     -- GROUP 8: RISK ENGINE (Red Flags)
     risk_flags text,            -- "Clean" or "ALERT: Lawsuit"
     recent_news jsonb,          -- Raw news articles
-    
+
     -- GROUP 9: AI METADATA (Audit Trail)
     ai_confidence numeric,      -- 0.0 - 1.0
     ai_evidence text,           -- Quote used for reasoning
-    
+
     -- GROUP 10: SYSTEM META (Pipeline Status)
     enrichment_status text DEFAULT 'pending', -- pending, partial, complete
     date_added date DEFAULT CURRENT_DATE,
@@ -207,7 +206,7 @@ CREATE TABLE IF NOT EXISTS scale_generator_config (
 -- -----------------------------------------------------------------------------
 
 CREATE OR REPLACE VIEW user_stats AS
-SELECT 
+SELECT
     u.id,
     u.email,
     u.full_name,
@@ -241,26 +240,26 @@ CREATE INDEX IF NOT EXISTS idx_user_activity_created_at ON user_activity(created
 -- =============================================================================
 
 -- Companies foreign keys
-ALTER TABLE companies 
+ALTER TABLE companies
     DROP CONSTRAINT IF EXISTS companies_user_id_fkey,
-    ADD CONSTRAINT companies_user_id_fkey 
+    ADD CONSTRAINT companies_user_id_fkey
     FOREIGN KEY (user_id) REFERENCES users(id);
 
 -- Signals foreign keys
-ALTER TABLE signals_job_postings 
+ALTER TABLE signals_job_postings
     DROP CONSTRAINT IF EXISTS signals_job_postings_company_id_fkey,
-    ADD CONSTRAINT signals_job_postings_company_id_fkey 
+    ADD CONSTRAINT signals_job_postings_company_id_fkey
     FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE;
 
-ALTER TABLE signals_revenue_history 
+ALTER TABLE signals_revenue_history
     DROP CONSTRAINT IF EXISTS signals_revenue_history_company_id_fkey,
-    ADD CONSTRAINT signals_revenue_history_company_id_fkey 
+    ADD CONSTRAINT signals_revenue_history_company_id_fkey
     FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE;
 
 -- User activity foreign keys
-ALTER TABLE user_activity 
+ALTER TABLE user_activity
     DROP CONSTRAINT IF EXISTS user_activity_user_id_fkey,
-    ADD CONSTRAINT user_activity_user_id_fkey 
+    ADD CONSTRAINT user_activity_user_id_fkey
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 
 -- =============================================================================
