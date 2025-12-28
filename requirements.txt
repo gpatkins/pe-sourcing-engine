@@ -77,7 +77,11 @@ tldextract==5.1.0
 # --- INTELLIGENCE & AI ---
 # The official Google Gemini SDK for AI processing.
 # Used in: enrich/ai_classifier.py (industry classification), enrich/owner_finder.py (ghost hunting)
-google-generativeai==0.3.1
+google-generativeai==0.8.5
+
+# Protocol buffers library - CRITICAL: Version 5.29.5 required for Python 3.14 compatibility
+# Earlier versions cause "Metaclasses with custom tp_new are not supported" error
+protobuf==5.29.5
 
 # DuckDuckGo Search library for finding LinkedIn profiles and social links.
 # Used in: enrich/linkedin_finder.py (LinkedIn URL discovery)
