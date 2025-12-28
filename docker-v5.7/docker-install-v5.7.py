@@ -8,6 +8,7 @@ import os
 import sys
 import subprocess
 import secrets
+import time
 from pathlib import Path
 
 def run_command(command, ignore_errors=False):
@@ -52,20 +53,20 @@ def create_env_file():
     if env_path.exists():
         print("\n📄 Existing .env found. Updating...")
         with open(env_path, 'r') as f:
-            env_content = f.read()
+            existing = dict(line.strip().split('=', 1) for line in f if '=' in line and not line.startswith('#'))
     else:
+        existing = {}
         env_path.write_text("")
-        env_content = ""
     
-    # Required vars
-    db_pass = prompt("Database Password", "changeme")
-    jwt_secret = prompt("JWT Secret Key (auto-generated if blank)", secrets.token_hex(32))
-    csrf_secret = prompt("CSRF Secret (auto-generated if blank)", secrets.token_hex(32))
+    # Required vars - always prompt to allow updates
+    db_pass = prompt("Database Password", existing.get("DB_PASS", "changeme"))
+    jwt_secret = prompt("JWT Secret Key (auto-generated if blank)", existing.get("JWT_SECRET_KEY") or secrets.token_hex(32))
+    csrf_secret = prompt("CSRF Secret (auto-generated if blank)", existing.get("CSRF_SECRET") or secrets.token_hex(32))
     
-    # API Keys (prompt even if exist to allow updates)
-    google_places = prompt("Google Places API Key")
-    gemini = prompt("Google Gemini API Key")
-    serper = prompt("Serper API Key")
+    # API Keys - prompt even if exist
+    google_places = prompt("Google Places API Key", existing.get("GOOGLE_PLACES_API_KEY", ""))
+    gemini = prompt("Google Gemini API Key", existing.get("GOOGLE_GEMINI_API_KEY", ""))
+    serper = prompt("Serper API Key", existing.get("SERPER_API_KEY", ""))
     
     env_lines = [
         f"DB_USER=pe_sourcer",
@@ -82,27 +83,35 @@ def create_env_file():
     print("✅ .env file created/updated")
 
 def validate_setup():
-    """Validate .env keys and test DB connection after up"""
+    """Light validation - warn about missing keys but do not block"""
     print("\n🔍 Validating setup...")
     
-    # Check keys in .env
     with open(".env", 'r') as f:
         content = f.read()
-    required = ["DB_PASS", "JWT_SECRET_KEY", "CSRF_SECRET", "GOOGLE_PLACES_API_KEY", "GOOGLE_GEMINI_API_KEY", "SERPER_API_KEY"]
-    missing = [k for k in required if f"{k}=" not in content or f"{k}=" in content and len(content.split(f"{k}=")[1].split("\n")[0]) < 10]
-    if missing:
-        print(f"⚠️ Missing/invalid keys: {', '.join(missing)}. Please edit .env and rerun.")
+    
+    # Only check for presence (allow blank API keys for testing)
+    required_critical = ["DB_PASS", "JWT_SECRET_KEY", "CSRF_SECRET"]
+    missing_critical = [k for k in required_critical if f"{k}=" not in content or content.split(f"{k}=")[1].split("\n")[0].strip() == ""]
+    if missing_critical:
+        print(f"❌ Critical missing: {', '.join(missing_critical)}. Please fill and rerun installer.")
         sys.exit(1)
     
-    # Test DB after up
+    optional = ["GOOGLE_PLACES_API_KEY", "GOOGLE_GEMINI_API_KEY", "SERPER_API_KEY"]
+    missing_optional = [k for k in optional if f"{k}=" not in content or content.split(f"{k}=")[1].split("\n")[0].strip() == ""]
+    if missing_optional:
+        print(f"⚠️ Optional API keys missing (pipeline steps will skip): {', '.join(missing_optional)}")
+    else:
+        print("✅ All API keys present")
+    
+    # Test DB connection
     run_command("docker compose -f docker-compose-v5.7.yml up -d db")
-    time.sleep(10)  # Wait for DB
+    time.sleep(10)
     test_cmd = "docker compose -f docker-compose-v5.7.yml exec db psql -U pe_sourcer -d pe_sourcing_db -c 'SELECT 1;'"
     if not run_command(test_cmd, ignore_errors=True):
         print("❌ DB connection test failed. Check logs with: docker compose logs db")
         sys.exit(1)
     
-    print("✅ Validation passed")
+    print("✅ Validation passed (proceeding with optional keys blank if needed)")
 
 def main():
     print("\n" + "="*60)
@@ -122,9 +131,9 @@ def main():
     validate_setup()
     
     print("\n✅ Installation complete!")
-    print("Access Dashboard: http://localhost:8001")
+    print("Access Dashboard: http://localhost:80/login")
     print("Default Login: admin@dealgenome.local / admin123")
-    print("⚠️ Change password immediately!")
+    print("⚠️ Change password immediately after first login!")
     
     print("\n🛠️ Useful Commands:")
     print("  Management: python3 docker-manage-v5.7.py")
