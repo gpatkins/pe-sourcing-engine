@@ -24,10 +24,12 @@ services:
   # FastAPI Application (Dashboard + Pipeline)
   app:
     build:
-      context: ..                  # Build context = repository root
-      dockerfile: docker-v5.7/Dockerfile-v5.7  # Explicit Dockerfile path
+      context: ..
+      dockerfile: docker-v5.7/Dockerfile-v5.7
     container_name: pe-sourcing-app-v57
     restart: unless-stopped
+    ports:
+      - "8000:8000"               # Expose FastAPI directly on host port 8000
     env_file:
       - .env
     environment:
