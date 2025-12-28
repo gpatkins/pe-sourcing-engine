@@ -29,6 +29,7 @@ services:
     ports:
       - "8001:8000"
     volumes:
+      - ../config/secrets-docker.env:/app/config/secrets.env
       - ../logs:/app/logs
       - app_data_v57:/app/data
     env_file:
