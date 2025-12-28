@@ -23,7 +23,9 @@ services:
 
   # FastAPI Application (Dashboard + Pipeline)
   app:
-    build: .
+    build:
+      context: ..                  # Build context = repository root
+      dockerfile: docker-v5.7/Dockerfile-v5.7  # Explicit Dockerfile path
     container_name: pe-sourcing-app-v57
     restart: unless-stopped
     env_file:
@@ -69,7 +71,7 @@ services:
     networks:
       - pe-network-v57
 
-  # Caddy Web Server (Optional - HTTPS)
+  # Caddy Web Server (Optional - for HTTPS)
   caddy:
     image: caddy:2-alpine
     container_name: pe-sourcing-caddy-v57
