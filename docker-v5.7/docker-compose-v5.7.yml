@@ -29,7 +29,6 @@ services:
     ports:
       - "8001:8000"
     volumes:
-      - ../config:/app/config
       - ../logs:/app/logs
       - app_data_v57:/app/data
     env_file:
