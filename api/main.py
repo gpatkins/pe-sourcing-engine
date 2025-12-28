@@ -1227,14 +1227,9 @@ async def update_env_vars(
                 status_code=HTTP_303_SEE_OTHER
             )
         
-        # Write updated .env file
-        with open(env_path, 'w', encoding='utf-8') as f:
-            f.write("# PE Sourcing Engine - Environment Variables\n")
-            f.write(f"# Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"# Updated by: {admin['email']}\n\n")
-            
-            for key, value in sorted(env_vars.items()):
-                f.write(f"{key}={value}\n")
+        # Write clean KEY=VALUE format only (no headers/comments)
+        lines = [f"{k}={v}" for k, v in sorted(env_vars.items())]
+        env_path.write_text("\n".join(lines) + "\n")
         
         # Log activity
         conn = get_db_connection()
@@ -1455,4 +1450,3 @@ async def restart_application(
                 "message": f"Application restart error: {str(e)}"
             }
         )
-
