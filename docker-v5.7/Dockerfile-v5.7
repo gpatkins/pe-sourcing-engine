@@ -1,14 +1,13 @@
-# PE Sourcing Engine v5.7 - Clean Docker Build
-# Mirrors dg (Fedora/systemd) working configuration exactly
-# Python 3.14.2 to match production
+# PE Sourcing Engine v5.7 - Docker Image
+# Multi-user SaaS platform with JWT authentication
 
-FROM python:3.14.2-slim
+FROM python:3.13-slim
 
 LABEL maintainer="Gabriel Atkinson"
 LABEL version="5.7"
-LABEL description="PE Sourcing Engine - Docker build mirroring dg server"
+LABEL description="PE Sourcing Engine - Automated Deal Origination Platform"
 
-# System dependencies (minimal, matching dg requirements)
+# System dependencies for PostgreSQL, XML parsing, compilation, and 'at' command
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
@@ -16,14 +15,13 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     libxslt-dev \
     curl \
-    procps \
+    at \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
 WORKDIR /app
 
 # Copy and install Python dependencies
-# Using exact versions from dg's working setup
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
@@ -31,15 +29,22 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY . .
 
+# Copy entrypoint script
+COPY docker-v5.7/docker-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 # Create necessary directories
-RUN mkdir -p /app/logs /app/config /app/data
+RUN mkdir -p /app/logs /app/config
 
 # Expose port
 EXPOSE 8000
 
-# Health check (simple, no auth required)
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8000/login || exit 1
+    CMD curl -f http://localhost:8000/api/status || exit 1
 
-# Run uvicorn exactly as dg does (single worker, host 0.0.0.0, port 8000)
+# Use custom entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
+
+# Run the application
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
