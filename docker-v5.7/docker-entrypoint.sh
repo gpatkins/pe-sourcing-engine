@@ -6,9 +6,13 @@ if [ -f /app/.env ]; then
   export $(grep -v '^#' /app/.env | xargs)
 fi
 
-# Generate secrets.env from environment variables
-# This allows admin panel to read/write API keys while keeping DB_HOST=db
-cat > /app/config/secrets.env << EOF
+# Path to secrets.env
+SECRETS_FILE="/app/config/secrets.env"
+
+# Generate secrets.env ONLY if it doesn't exist or is empty
+if [ ! -f "$SECRETS_FILE" ] || [ ! -s "$SECRETS_FILE" ]; then
+  echo "Generating $SECRETS_FILE from environment variables..."
+  cat > "$SECRETS_FILE" << EOF
 # Auto-generated from Docker environment variables
 # Admin panel updates to API keys will persist in this file
 
@@ -25,8 +29,9 @@ SERPER_API_KEY=${SERPER_API_KEY:-}
 
 METABASE_URL=${METABASE_URL:-http://metabase:3000}
 EOF
-
-echo "Generated /app/config/secrets.env for application use"
+else
+  echo "$SECRETS_FILE exists and is not empty - preserving admin updates."
+fi
 
 # Start atd for system restart functionality
 atd &
