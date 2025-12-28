@@ -201,7 +201,7 @@ GROUP BY u.id, u.email, u.full_name, u.role, u.last_login, u.created_at;
 INSERT INTO users (email, hashed_password, full_name, role, is_active)
 VALUES (
     'admin@dealgenome.local',
-    '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYzpLRU8uXi',
+    '$2b$12$jt7SB4jspFfPFHGypV80RuZsFOTmRlO0G7icgZb8OvqYk64xMY6Me',
     'System Administrator',
     'admin',
     TRUE
