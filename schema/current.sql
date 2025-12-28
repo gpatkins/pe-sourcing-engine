@@ -1,4 +1,4 @@
--- PE Sourcing Engine v5.5 - Consolidated Database Schema
+-- PE Sourcing Engine v5.7 - Consolidated Database Schema
 -- Single authoritative source for database structure
 -- Last updated: December 2024
 -- See schema/README.md for documentation
@@ -7,90 +7,9 @@
 SET search_path TO public;
 
 -- ============================================================================
--- TABLE: companies
--- Core table storing all discovered and enriched company data
--- ============================================================================
-CREATE TABLE IF NOT EXISTS companies (
-    -- Core Identity
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
-    legal_name TEXT,
-    url TEXT,
-    description TEXT,
-    
-    -- Location & Contact
-    phone TEXT,
-    address TEXT,
-    city TEXT,
-    state TEXT,
-    zip TEXT,
-    country TEXT,
-    
-    -- Business Classification
-    industry_tag TEXT,
-    naics_code TEXT,
-    naics_description TEXT,
-    customer_type TEXT,
-    revenue_model TEXT,
-    is_ecommerce BOOLEAN DEFAULT FALSE,
-    is_franchise BOOLEAN DEFAULT FALSE,
-    is_family_owned BOOLEAN DEFAULT FALSE,
-    
-    -- Financial Metrics
-    revenue_estimate NUMERIC,
-    employee_count INTEGER,
-    buyability_score SMALLINT CHECK (buyability_score >= 0 AND buyability_score <= 100),
-    
-    -- Ownership & Leadership
-    owner_name TEXT,
-    owner_phone TEXT,
-    founder_email TEXT,
-    owner_source TEXT,
-    
-    -- Digital Presence
-    linkedin_company_url TEXT,
-    owner_linkedin_url TEXT,
-    hiring_page_url TEXT,
-    facebook_url TEXT,
-    instagram_url TEXT,
-    twitter_url TEXT,
-    youtube_url TEXT,
-    
-    -- Technology & Metrics
-    website_tech_stack JSONB,
-    google_rating NUMERIC,
-    google_reviews INTEGER,
-    
-    -- Risk Analysis
-    risk_flags TEXT,
-    recent_news JSONB,
-    
-    -- AI Metadata
-    ai_confidence NUMERIC,
-    ai_evidence TEXT,
-    
-    -- System Metadata
-    enrichment_status TEXT DEFAULT 'pending',
-    date_added DATE DEFAULT CURRENT_DATE,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
-    last_enriched_at TIMESTAMP,
-    
-    -- Multi-user Support (v5.1)
-    user_id INTEGER REFERENCES users(id)
-);
-
--- Indexes for companies table
-CREATE INDEX IF NOT EXISTS idx_companies_user_id ON companies(user_id);
-CREATE INDEX IF NOT EXISTS idx_companies_enrichment_status ON companies(enrichment_status);
-CREATE INDEX IF NOT EXISTS idx_companies_buyability_score ON companies(buyability_score DESC NULLS LAST);
-CREATE INDEX IF NOT EXISTS idx_companies_created_at ON companies(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_companies_industry_tag ON companies(industry_tag);
-CREATE INDEX IF NOT EXISTS idx_companies_state ON companies(state);
-
--- ============================================================================
 -- TABLE: users
 -- User authentication and authorization (v5.1)
+-- MUST BE CREATED FIRST - other tables reference this
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
@@ -106,6 +25,88 @@ CREATE TABLE IF NOT EXISTS users (
 -- Indexes for users table
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+
+-- ============================================================================
+-- TABLE: companies
+-- Core table storing all discovered and enriched company data
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS companies (
+    -- Core Identity
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    legal_name TEXT,
+    url TEXT,
+    description TEXT,
+
+    -- Location & Contact
+    phone TEXT,
+    address TEXT,
+    city TEXT,
+    state TEXT,
+    zip TEXT,
+    country TEXT,
+
+    -- Business Classification
+    industry_tag TEXT,
+    naics_code TEXT,
+    naics_description TEXT,
+    customer_type TEXT,
+    revenue_model TEXT,
+    is_ecommerce BOOLEAN DEFAULT FALSE,
+    is_franchise BOOLEAN DEFAULT FALSE,
+    is_family_owned BOOLEAN DEFAULT FALSE,
+
+    -- Financial Metrics
+    revenue_estimate NUMERIC,
+    employee_count INTEGER,
+    buyability_score SMALLINT CHECK (buyability_score >= 0 AND buyability_score <= 100),
+
+    -- Ownership & Leadership
+    owner_name TEXT,
+    owner_phone TEXT,
+    founder_email TEXT,
+    owner_source TEXT,
+
+    -- Digital Presence
+    linkedin_company_url TEXT,
+    owner_linkedin_url TEXT,
+    hiring_page_url TEXT,
+    facebook_url TEXT,
+    instagram_url TEXT,
+    twitter_url TEXT,
+    youtube_url TEXT,
+
+    -- Technology & Metrics
+    website_tech_stack JSONB,
+    google_rating NUMERIC,
+    google_reviews INTEGER,
+
+    -- Risk Analysis
+    risk_flags TEXT,
+    recent_news JSONB,
+
+    -- AI Metadata
+    ai_confidence NUMERIC,
+    ai_evidence TEXT,
+
+    -- System Metadata
+    enrichment_status TEXT DEFAULT 'pending',
+    date_added DATE DEFAULT CURRENT_DATE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    last_enriched_at TIMESTAMP,
+
+    -- Multi-user Support (v5.1)
+    user_id INTEGER REFERENCES users(id)
+);
+
+-- Indexes for companies table
+CREATE INDEX IF NOT EXISTS idx_companies_user_id ON companies(user_id);
+CREATE INDEX IF NOT EXISTS idx_companies_enrichment_status ON companies(enrichment_status);
+CREATE INDEX IF NOT EXISTS idx_companies_buyability_score ON companies(buyability_score DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_companies_created_at ON companies(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_companies_industry_tag ON companies(industry_tag);
+CREATE INDEX IF NOT EXISTS idx_companies_state ON companies(state);
 
 -- ============================================================================
 -- TABLE: user_activity
@@ -177,7 +178,7 @@ CREATE INDEX IF NOT EXISTS idx_signals_revenue_history_company_id ON signals_rev
 -- Aggregated statistics for user dashboard (v5.1)
 -- ============================================================================
 CREATE OR REPLACE VIEW user_stats AS
-SELECT 
+SELECT
     u.id,
     u.email,
     u.full_name,
@@ -327,5 +328,5 @@ COMMENT ON COLUMN companies.user_id IS 'Links company to user who discovered it 
 COMMENT ON COLUMN users.role IS 'admin: full access | user: can discover and view own companies';
 
 -- ============================================================================
--- SCHEMA COMPLETE
+-- SCHEMA COMPLETE v5.7 - Table order fixed for proper foreign key resolution
 -- ============================================================================
