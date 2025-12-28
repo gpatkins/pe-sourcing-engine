@@ -1,0 +1,112 @@
+# PE Sourcing Engine v5.7 - Docker Compose
+# Clean setup mirroring dg (Fedora/systemd) configuration
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: pe-sourcing-db-v57
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-pe_sourcer}
+      POSTGRES_PASSWORD: ${DB_PASS:-changeme}
+      POSTGRES_DB: ${DB_NAME:-pe_sourcing_db}
+    volumes:
+      - postgres_data_v57:/var/lib/postgresql/data
+      - ./schema/current.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pe_sourcer}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pe-network-v57
+
+  # FastAPI Application
+  app:
+    build:
+      context: ..
+      dockerfile: docker-v5.7/Dockerfile-v5.7
+    container_name: pe-sourcing-app-v57
+    restart: unless-stopped
+    ports:
+      - "8001:8000"
+    volumes:
+      - ../config:/app/config
+      - ../logs:/app/logs
+      - app_data_v57:/app/data
+    env_file:
+      - ../config/secrets.env
+    environment:
+      # Database connection (points to db container)
+      DB_HOST: db
+      DB_PORT: 5432
+      
+      # Load everything else from config/secrets.env
+      # No need to redeclare - env_file handles it
+      
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - pe-network-v57
+
+  # Metabase (Optional - using separate DB to avoid conflicts)
+  metabase:
+    image: metabase/metabase:latest
+    container_name: pe-sourcing-metabase-v57
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      # Metabase uses its own embedded H2 database
+      # This avoids schema conflicts with our app
+      MB_DB_TYPE: h2
+      MB_DB_FILE: /metabase-data/metabase.db
+    volumes:
+      - metabase_data_v57:/metabase-data
+    networks:
+      - pe-network-v57
+    profiles:
+      - with-metabase
+
+  # Caddy (Optional - for HTTPS)
+  caddy:
+    image: caddy:2-alpine
+    container_name: pe-sourcing-caddy-v57
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+      - "8443:443"
+    volumes:
+      - ./Caddyfile-v5.7:/etc/caddy/Caddyfile:ro
+      - caddy_data_v57:/data
+      - caddy_config_v57:/config
+    depends_on:
+      - app
+    networks:
+      - pe-network-v57
+    profiles:
+      - with-caddy
+
+volumes:
+  postgres_data_v57:
+    driver: local
+  metabase_data_v57:
+    driver: local
+  app_data_v57:
+    driver: local
+  caddy_data_v57:
+    driver: local
+  caddy_config_v57:
+    driver: local
+
+networks:
+  pe-network-v57:
+    driver: bridge
