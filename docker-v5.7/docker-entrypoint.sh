@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+# Load .env if exists (fallback for unset vars)
+if [ -f /app/.env ]; then
+  export $(grep -v '^#' /app/.env | xargs)
+fi
+
 # Generate secrets.env from environment variables
 # This allows admin panel to read/write API keys while keeping DB_HOST=db
 cat > /app/config/secrets.env << EOF
