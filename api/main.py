@@ -1324,66 +1324,75 @@ async def system_cleanup(
     request: Request,
     admin: dict = Depends(require_admin)
 ):
-    """Run system cleanup script to free memory and resources."""
+    """Run system cleanup - reset pipeline state and optionally run cleanup script."""
     try:
+        results = []
+        
+        # 1. Reset pipeline state manager (clears "Running: X" status)
+        try:
+            from etl.utils.state_manager import clear_running
+            clear_running()
+            results.append("✅ Pipeline state cleared")
+        except Exception as e:
+            results.append(f"⚠️ Failed to clear pipeline state: {e}")
+        
+        # 2. Reset pipeline progress file (clears progress bar)
+        try:
+            progress_file = BASE_DIR / "pipeline_progress.json"
+            progress_data = {
+                "stage": "idle",
+                "status": "idle",
+                "current": 0,
+                "total": 0,
+                "message": "System idle",
+                "updated_at": datetime.utcnow().isoformat()
+            }
+            with open(progress_file, "w") as f:
+                json.dump(progress_data, f)
+            results.append("✅ Pipeline progress reset")
+        except Exception as e:
+            results.append(f"⚠️ Failed to reset progress file: {e}")
+        
+        # 3. Run cleanup script if it exists (optional - for non-Docker environments)
         cleanup_script = BASE_DIR / "clean.sh"
-        
-        if not cleanup_script.exists():
-            return JSONResponse(
-                status_code=404,
-                content={
-                    "success": False,
-                    "message": "Cleanup script not found at /opt/pe-sourcing-engine/clean.sh"
-                }
-            )
-        
-        # Make script executable
-        os.chmod(cleanup_script, 0o755)
-        
-        # Run cleanup script using shell=True to ensure bash is found
-        result = subprocess.run(
-            f'/bin/bash {cleanup_script}',
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=60
-        )
+        if cleanup_script.exists():
+            try:
+                os.chmod(cleanup_script, 0o755)
+                result = subprocess.run(
+                    f'/bin/bash {cleanup_script}',
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
+                if result.returncode == 0:
+                    results.append("✅ Cleanup script completed")
+                    if result.stdout.strip():
+                        results.append(f"   Output: {result.stdout.strip()[:200]}")
+                else:
+                    results.append(f"⚠️ Cleanup script failed: {result.stderr[:100]}")
+            except subprocess.TimeoutExpired:
+                results.append("⚠️ Cleanup script timed out")
+            except Exception as e:
+                results.append(f"⚠️ Cleanup script error: {e}")
+        else:
+            results.append("ℹ️ No cleanup script found (clean.sh) - skipping")
         
         # Log activity
         conn = get_db_connection()
         log_user_activity(conn, admin["user_id"], ActivityType.SYSTEM_CLEANUP, {
             "timestamp": datetime.utcnow().isoformat(),
-            "exit_code": result.returncode,
-            "success": result.returncode == 0
+            "results": results
         })
         conn.close()
         
-        if result.returncode == 0:
-            return JSONResponse(content={
-                "success": True,
-                "message": "System cleanup completed successfully",
-                "output": result.stdout,
-                "timestamp": datetime.utcnow().isoformat()
-            })
-        else:
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "success": False,
-                    "message": "System cleanup failed",
-                    "error": result.stderr,
-                    "output": result.stdout
-                }
-            )
+        return JSONResponse(content={
+            "success": True,
+            "message": "System cleanup completed",
+            "output": "\n".join(results),
+            "timestamp": datetime.utcnow().isoformat()
+        })
             
-    except subprocess.TimeoutExpired:
-        return JSONResponse(
-            status_code=504,
-            content={
-                "success": False,
-                "message": "System cleanup timed out after 60 seconds"
-            }
-        )
     except Exception as e:
         return JSONResponse(
             status_code=500,
