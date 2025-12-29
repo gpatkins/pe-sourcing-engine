@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 # Path to secrets.env
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 SECRETS_FILE = BASE_DIR / "config" / "secrets.env"
 
 
