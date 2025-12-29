@@ -1068,18 +1068,35 @@ async def delete_scale_generator_location(
 # PIPELINE EXECUTION ROUTES
 # ============================================================================
 
+from etl.discover.google_places import run_discovery as run_discover
+
 def _run_step(step: str, user_id: int):
-    """Background task to run pipeline step."""
-    if step == "discover": 
-        run_discover(user_id)
-    elif step == "enrich": 
-        run_enrich()
-    elif step == "score": 
-        run_score()
-    elif step == "full":
-        run_discover(user_id)
-        run_enrich()
-        run_score()
+    """Run pipeline step with lazy imports and error handling."""
+    logger = logging.getLogger("pipeline")
+    try:
+        if step == "discover": 
+            logger.info(f"Starting discovery for user_id={user_id}")
+            run_discover(user_id)
+        elif step == "enrich": 
+            from enrich_companies import main as run_enrich
+            logger.info("Starting enrichment")
+            run_enrich()
+        elif step == "score": 
+            from etl.score.calculate_scores import main as run_score
+            logger.info("Starting scoring")
+            run_score()
+        elif step == "full":
+            from enrich_companies import main as run_enrich
+            from etl.score.calculate_scores import main as run_score
+            logger.info(f"Starting full pipeline for user_id={user_id}")
+            run_discover(user_id)
+            run_enrich()
+            run_score()
+        logger.info(f"Step {step} completed successfully")
+    except Exception as e:
+        logger.error(f"Pipeline step {step} failed: {type(e).__name__}: {e}", exc_info=True)
+        with open("/opt/pe-sourcing-engine/logs/pipeline.log", "a") as f:
+            f.write(f"{datetime.utcnow()} [ERROR] Pipeline {step} failed: {e}\n")
 
 @app.post("/run/{step}")
 async def run_step(
@@ -1088,13 +1105,17 @@ async def run_step(
     current_user: dict = Depends(get_current_active_user)
 ):
     """Run pipeline step in background."""
-    if step in {"discover", "enrich", "score", "full"}:
-        background_tasks.add_task(_run_step, step, current_user["user_id"])
+    if step not in {"discover", "enrich", "score", "full"}:
+        raise HTTPException(status_code=400, detail="Invalid step")
 
-        # Log activity
-        conn = get_db_connection()
-        log_user_activity(conn, current_user["user_id"], ActivityType.DISCOVERY_RUN if step == "discover" else ActivityType.ENRICHMENT_RUN, {"step": step})
-        conn.close()
+    background_tasks.add_task(_run_step, step, current_user["user_id"])
+
+    # Log activity with safe fallback (use existing constant)
+    conn = get_db_connection()
+    # Use DISCOVERY_RUN as safe default - avoids missing attribute
+    activity_type = ActivityType.DISCOVERY_RUN
+    log_user_activity(conn, current_user["user_id"], activity_type, {"step": step})
+    conn.close()
 
     return RedirectResponse(url="/dashboard", status_code=HTTP_303_SEE_OTHER)
     

@@ -53,3 +53,11 @@ discovery:
     text_query: home school enrichment in utah
     region_code: US
     limit: 1
+  - label: hvac in waldorf maryland
+    text_query: hvac in waldorf maryland
+    region_code: US
+    limit: 2
+  - label: hvac company in utah
+    text_query: hvac company in utah
+    region_code: US
+    limit: 3
