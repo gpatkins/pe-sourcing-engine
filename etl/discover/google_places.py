@@ -15,11 +15,14 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 SETTINGS_PATH = os.path.join(BASE_DIR, "config", "settings.yaml")
 ENV_PATH = os.path.join(BASE_DIR, "config", "secrets.env")
 
-load_dotenv(ENV_PATH)
+# Use override=True so secrets.env takes precedence over Docker env vars
+# This allows admin dashboard updates to work in Docker
+load_dotenv(ENV_PATH, override=True)
 API_KEY = os.getenv("GOOGLE_PLACES_API_KEY")
 PLACES_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
 
 logger = setup_logger("discovery")
+
 
 def search_places_new(text_query: str, page_token: Optional[str] = None, region_code: Optional[str] = None) -> Dict[str, Any]:
     if not API_KEY:
@@ -28,7 +31,6 @@ def search_places_new(text_query: str, page_token: Optional[str] = None, region_
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": API_KEY,
-        # Minimal supported fields for Text Search to avoid 400 errors
         "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.primaryType,places.rating,places.userRatingCount,places.websiteUri,places.nationalPhoneNumber"
     }
     
@@ -41,6 +43,7 @@ def search_places_new(text_query: str, page_token: Optional[str] = None, region_
     resp = requests.post(PLACES_SEARCH_URL, headers=headers, json=body, timeout=10)
     resp.raise_for_status()
     return resp.json()
+
 
 def generate_deterministic_id(website: str | None, name: str, address: str | None) -> str:
     if website:
@@ -56,6 +59,7 @@ def generate_deterministic_id(website: str | None, name: str, address: str | Non
     unique_str = f"{(name or '').lower()}|{(address or '').lower()}"
     return str(uuid.uuid5(uuid.NAMESPACE_DNS, unique_str))
 
+
 def get_admin_user_id() -> int:
     """Get the admin user ID (or first user if no admin exists)."""
     result = fetch_one_dict("SELECT id FROM users WHERE role = 'admin' ORDER BY created_at LIMIT 1")
@@ -67,20 +71,21 @@ def get_admin_user_id() -> int:
         return result['id']
     raise RuntimeError("No users found in database")
 
+
 def upsert_company(place: Dict[str, Any], user_id: int) -> None:
     name = (place.get("displayName") or {}).get("text")
     address = place.get("formattedAddress")
     website = place.get("websiteUri")
-    phone = place.get("nationalPhoneNumber")    
+    phone = place.get("nationalPhoneNumber")
     rating = place.get("rating")
     reviews = place.get("userRatingCount")
-    industry_tag = place.get("primaryType")  # Use primaryType as initial tag
+    industry_tag = place.get("primaryType")
 
     city = state = zip_code = country = None
     if address and "," in address:
         parts = [p.strip() for p in address.split(",")]
         if len(parts) >= 3:
-            city = parts[-3] if len(parts) > 3 else parts[-2]  # Better parsing
+            city = parts[-3] if len(parts) > 3 else parts[-2]
             state_zip_part = parts[-1]
             tokens = state_zip_part.split()
             if len(tokens) >= 1: state = tokens[0]
@@ -130,6 +135,7 @@ def upsert_company(place: Dict[str, Any], user_id: int) -> None:
     }
     
     execute(sql, params)
+
 
 def run_discovery(user_id: Optional[int] = None):
     try:
@@ -195,12 +201,12 @@ def run_discovery(user_id: Optional[int] = None):
                     time.sleep(2)  # Rate limit respect
                 except Exception as e:
                     logger.error(f"Error during search: {e}")
-                    # Print response for debugging
                     if hasattr(e, 'response'):
                         logger.error(f"Response text: {e.response.text}")
                     break
     finally:
         clear_running()
+
 
 main = run_discovery
 

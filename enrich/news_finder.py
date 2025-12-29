@@ -2,11 +2,19 @@ from __future__ import annotations
 import logging
 import json
 import os
+from pathlib import Path
+
 import requests
+from dotenv import load_dotenv
 from typing import Any, Dict
 from .base import EnrichmentModule
 
+# Load secrets.env with override so admin dashboard updates work in Docker
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / "config" / "secrets.env", override=True)
+
 logger = logging.getLogger(__name__)
+
 
 class NewsFinder(EnrichmentModule):
     name = "news_finder"
@@ -37,7 +45,7 @@ class NewsFinder(EnrichmentModule):
                 "gl": "us",
                 "hl": "en",
                 "num": 5,
-                "tbs": "qdr:y5" # Last 5 years
+                "tbs": "qdr:y5"  # Last 5 years
             })
             
             headers = {

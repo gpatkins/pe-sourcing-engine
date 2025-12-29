@@ -2,11 +2,19 @@ from __future__ import annotations
 import logging
 import json
 import os
+from pathlib import Path
+
 import google.generativeai as genai
+from dotenv import load_dotenv
 from typing import Any, Dict
 from .base import EnrichmentModule
 
+# Load secrets.env with override so admin dashboard updates work in Docker
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / "config" / "secrets.env", override=True)
+
 logger = logging.getLogger(__name__)
+
 
 class AIClassifier(EnrichmentModule):
     name = "ai_classifier"

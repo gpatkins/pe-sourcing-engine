@@ -2,12 +2,20 @@ from __future__ import annotations
 import logging
 import json
 import os
+from pathlib import Path
+
 import requests
 import google.generativeai as genai
+from dotenv import load_dotenv
 from typing import Any, Dict
 from .base import EnrichmentModule
 
+# Load secrets.env with override so admin dashboard updates work in Docker
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / "config" / "secrets.env", override=True)
+
 logger = logging.getLogger(__name__)
+
 
 class OwnerFinder(EnrichmentModule):
     name = "owner_finder"
@@ -47,7 +55,7 @@ class OwnerFinder(EnrichmentModule):
                 "q": query,
                 "gl": "us",
                 "hl": "en",
-                "num": 5 # Top 5 results are usually enough
+                "num": 5  # Top 5 results are usually enough
             })
             
             headers = {
@@ -84,31 +92,34 @@ class OwnerFinder(EnrichmentModule):
             - If multiple names appear, prefer the Owner.
             - If NO name is clearly identified, return null.
             - Return strictly valid JSON.
-
-            JSON Schema:
+            
+            JSON Format:
             {{
-                "owner_name": str or null,
-                "title": str or null,
-                "confidence": float (0.0 to 1.0)
+                "owner_name": "Full Name" or null,
+                "title": "Their Title" or null,
+                "source": "Where you found this" or null,
+                "confidence": 0.0 to 1.0
             }}
             """
-
-            ai_resp = model.generate_content(
+            
+            ai_response = model.generate_content(
                 prompt,
                 generation_config={"response_mime_type": "application/json"}
             )
             
-            data = json.loads(ai_resp.text)
+            data = json.loads(ai_response.text)
             
-            # 6. Return Data if confident
-            if data.get("owner_name") and data.get("confidence", 0) > 0.6:
-                print(f"   -> GHOST FOUND: {data.get('owner_name')} ({data.get('title')})")
+            owner_name = data.get("owner_name")
+            if owner_name and data.get("confidence", 0) > 0.5:
+                print(f"   -> FOUND OWNER: {owner_name} ({data.get('title')})")
                 return {
-                    "owner_name": data.get("owner_name"),
-                    "owner_source": "Serper Ghost Search"
+                    "owner_name": owner_name,
+                    "owner_source": f"Ghost Hunter: {data.get('source', 'Web Search')}"
                 }
+            else:
+                print(f"   -> NO OWNER FOUND (confidence too low or null)")
 
         except Exception as e:
-            logger.warning(f"Owner finding failed for {company_name}: {e}")
+            logger.warning(f"Owner search failed for {company_name}: {e}")
             
         return {}
