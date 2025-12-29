@@ -29,7 +29,7 @@ def search_places_new(text_query: str, page_token: Optional[str] = None, region_
         "Content-Type": "application/json",
         "X-Goog-Api-Key": API_KEY,
         # Minimal supported fields for Text Search to avoid 400 errors
-        "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.primaryType,places.rating,places.userRatingCount"
+        "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.primaryType,places.rating,places.userRatingCount,places.websiteUri,places.nationalPhoneNumber"
     }
     
     body = {"textQuery": text_query}
@@ -70,8 +70,8 @@ def get_admin_user_id() -> int:
 def upsert_company(place: Dict[str, Any], user_id: int) -> None:
     name = (place.get("displayName") or {}).get("text")
     address = place.get("formattedAddress")
-    website = None  # Not available in Text Search - set later if needed
-    phone = None     # Not reliably available in Text Search
+    website = place.get("websiteUri")
+    phone = place.get("nationalPhoneNumber")    
     rating = place.get("rating")
     reviews = place.get("userRatingCount")
     industry_tag = place.get("primaryType")  # Use primaryType as initial tag

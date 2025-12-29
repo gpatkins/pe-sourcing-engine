@@ -1071,32 +1071,38 @@ async def delete_scale_generator_location(
 from etl.discover.google_places import run_discovery as run_discover
 
 def _run_step(step: str, user_id: int):
-    """Run pipeline step with lazy imports and error handling."""
+    """Run pipeline step with progress tracking."""
+    # Import the wrapper functions from run_pipeline.py that include progress updates
+    from run_pipeline import (
+        run_discover as pipeline_discover,
+        run_enrich as pipeline_enrich,
+        run_score as pipeline_score,
+        clear_progress
+    )
+    import logging
+    
     logger = logging.getLogger("pipeline")
     try:
         if step == "discover": 
             logger.info(f"Starting discovery for user_id={user_id}")
-            run_discover(user_id)
+            pipeline_discover(user_id)
         elif step == "enrich": 
-            from enrich_companies import main as run_enrich
             logger.info("Starting enrichment")
-            run_enrich()
+            pipeline_enrich()
         elif step == "score": 
-            from etl.score.calculate_scores import main as run_score
             logger.info("Starting scoring")
-            run_score()
+            pipeline_score()
         elif step == "full":
-            from enrich_companies import main as run_enrich
-            from etl.score.calculate_scores import main as run_score
             logger.info(f"Starting full pipeline for user_id={user_id}")
-            run_discover(user_id)
-            run_enrich()
-            run_score()
+            pipeline_discover(user_id)
+            pipeline_enrich()
+            pipeline_score()
         logger.info(f"Step {step} completed successfully")
     except Exception as e:
         logger.error(f"Pipeline step {step} failed: {type(e).__name__}: {e}", exc_info=True)
-        with open("/opt/pe-sourcing-engine/logs/pipeline.log", "a") as f:
-            f.write(f"{datetime.utcnow()} [ERROR] Pipeline {step} failed: {e}\n")
+    finally:
+        # Ensure progress is cleared when done (even on error)
+        clear_progress()
 
 @app.post("/run/{step}")
 async def run_step(
