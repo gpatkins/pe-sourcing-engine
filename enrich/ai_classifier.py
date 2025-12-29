@@ -1,17 +1,16 @@
 from __future__ import annotations
 import logging
 import json
-import os
-from pathlib import Path
 
 import google.generativeai as genai
-from dotenv import load_dotenv
 from typing import Any, Dict
 from .base import EnrichmentModule
 
-# Load secrets.env with override so admin dashboard updates work in Docker
-BASE_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(BASE_DIR / "config" / "secrets.env", override=True)
+# Import from the central secrets loader
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from etl.utils.secrets_loader import get_gemini_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -21,9 +20,7 @@ class AIClassifier(EnrichmentModule):
 
     def __init__(self, config: Dict[str, Any] | None = None):
         super().__init__(config)
-        api_key = os.getenv("GEMINI_API_KEY")
-        if api_key:
-            genai.configure(api_key=api_key)
+        # Don't configure at init - do it fresh each time in enrich()
 
     def enrich(self, company: Dict[str, Any]) -> Dict[str, Any]:
         description = company.get("description")
@@ -34,6 +31,14 @@ class AIClassifier(EnrichmentModule):
         if not description or len(description) < 20:
             print("   -> SKIPPING: No description.")
             return {}
+
+        # Get API key fresh from secrets.env each time
+        api_key = get_gemini_api_key()
+        if not api_key:
+            print("   -> SKIPPING: No GEMINI_API_KEY in secrets.env")
+            return {}
+        
+        genai.configure(api_key=api_key)
 
         try:
             model = genai.GenerativeModel('gemini-2.5-flash')

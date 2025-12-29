@@ -1,18 +1,17 @@
 from __future__ import annotations
 import logging
 import json
-import os
-from pathlib import Path
 
 import requests
 import google.generativeai as genai
-from dotenv import load_dotenv
 from typing import Any, Dict
 from .base import EnrichmentModule
 
-# Load secrets.env with override so admin dashboard updates work in Docker
-BASE_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(BASE_DIR / "config" / "secrets.env", override=True)
+# Import from the central secrets loader
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from etl.utils.secrets_loader import get_gemini_api_key, get_serper_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -22,17 +21,15 @@ class OwnerFinder(EnrichmentModule):
 
     def __init__(self, config: Dict[str, Any] | None = None):
         super().__init__(config)
-        # Setup Gemini
-        api_key = os.getenv("GEMINI_API_KEY")
-        if api_key:
-            genai.configure(api_key=api_key)
+        # Don't configure at init - do it fresh each time in enrich()
 
     def enrich(self, company: Dict[str, Any]) -> Dict[str, Any]:
         # 1. Skip if we already know the owner
         if company.get("owner_name"):
             return {}
 
-        serper_key = os.getenv("SERPER_API_KEY")
+        # Get API keys fresh from secrets.env
+        serper_key = get_serper_api_key()
         if not serper_key:
             return {}
 
@@ -79,6 +76,12 @@ class OwnerFinder(EnrichmentModule):
                 evidence_text += f"SOURCE: {item.get('title')}\nTEXT: {item.get('snippet')}\n\n"
 
             # 5. Ask Gemini to play Detective
+            gemini_key = get_gemini_api_key()
+            if not gemini_key:
+                logger.warning("No GEMINI_API_KEY - cannot analyze owner search results")
+                return {}
+            
+            genai.configure(api_key=gemini_key)
             model = genai.GenerativeModel('gemini-2.5-flash')
             
             prompt = f"""

@@ -4,33 +4,31 @@ import time
 import uuid
 import requests
 import yaml
-from dotenv import load_dotenv
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 from etl.utils.db import execute, fetch_one_dict
 from etl.utils.state_manager import should_stop, set_running, clear_running
 from etl.utils.logger import setup_logger
+from etl.utils.secrets_loader import get_google_places_api_key
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 SETTINGS_PATH = os.path.join(BASE_DIR, "config", "settings.yaml")
-ENV_PATH = os.path.join(BASE_DIR, "config", "secrets.env")
 
-# Use override=True so secrets.env takes precedence over Docker env vars
-# This allows admin dashboard updates to work in Docker
-load_dotenv(ENV_PATH, override=True)
-API_KEY = os.getenv("GOOGLE_PLACES_API_KEY")
 PLACES_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
 
 logger = setup_logger("discovery")
 
 
 def search_places_new(text_query: str, page_token: Optional[str] = None, region_code: Optional[str] = None) -> Dict[str, Any]:
-    if not API_KEY:
-        raise RuntimeError("GOOGLE_PLACES_API_KEY is not set")
+    # Get API key fresh from secrets.env each time
+    api_key = get_google_places_api_key()
+    
+    if not api_key:
+        raise RuntimeError("GOOGLE_PLACES_API_KEY is not set in secrets.env")
     
     headers = {
         "Content-Type": "application/json",
-        "X-Goog-Api-Key": API_KEY,
+        "X-Goog-Api-Key": api_key,
         "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.primaryType,places.rating,places.userRatingCount,places.websiteUri,places.nationalPhoneNumber"
     }
     
