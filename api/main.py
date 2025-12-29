@@ -1229,13 +1229,32 @@ async def update_env_vars(
                         key, value = line.split('=', 1)
                         env_vars[key.strip()] = value.strip()
         
-        # Update only non-empty values
+        # PROTECTED KEYS - These must never be changed by the admin UI
+        # Ensure Docker-compatible defaults are always set
+        protected_defaults = {
+            'DB_HOST': 'db',           # Docker container name, not localhost
+            'DB_PORT': '5432',
+            'DB_NAME': env_vars.get('DB_NAME', 'pe_sourcing_db'),
+            'DB_USER': env_vars.get('DB_USER', 'pe_sourcer'),
+            'DB_PASS': env_vars.get('DB_PASS', 'changeme'),
+        }
+        
+        # Apply protected defaults (preserve existing DB_PASS if set)
+        for key, default_value in protected_defaults.items():
+            if key == 'DB_HOST':
+                # Always force DB_HOST to 'db' for Docker compatibility
+                env_vars[key] = 'db'
+            elif key not in env_vars or not env_vars[key]:
+                env_vars[key] = default_value
+        
+        # Update only non-empty API key values
         updated_keys = []
         if google_places_api_key.strip():
             env_vars['GOOGLE_PLACES_API_KEY'] = google_places_api_key.strip()
             updated_keys.append('GOOGLE_PLACES_API_KEY')
         
         if google_gemini_api_key.strip():
+            # Only use GEMINI_API_KEY (the one actually used by code)
             env_vars['GEMINI_API_KEY'] = google_gemini_api_key.strip()
             updated_keys.append('GEMINI_API_KEY')
         
@@ -1253,9 +1272,29 @@ async def update_env_vars(
                 status_code=HTTP_303_SEE_OTHER
             )
         
-        # Write clean KEY=VALUE format only (no headers/comments)
-        lines = [f"{k}={v}" for k, v in sorted(env_vars.items())]
-        env_path.write_text("\n".join(lines) + "\n")
+        # Write the file with protected DB settings first, then API keys
+        # This ensures a clean, predictable order
+        output_lines = [
+            "# PE Sourcing Engine - secrets.env",
+            "# Updated via Admin Dashboard",
+            "",
+            "# Database Connection (DO NOT MODIFY - managed by Docker)",
+            f"DB_HOST={env_vars.get('DB_HOST', 'db')}",
+            f"DB_PORT={env_vars.get('DB_PORT', '5432')}",
+            f"DB_NAME={env_vars.get('DB_NAME', 'pe_sourcing_db')}",
+            f"DB_USER={env_vars.get('DB_USER', 'pe_sourcer')}",
+            f"DB_PASS={env_vars.get('DB_PASS', 'changeme')}",
+            "",
+            "# API Keys (managed via Admin Dashboard)",
+            f"GOOGLE_PLACES_API_KEY={env_vars.get('GOOGLE_PLACES_API_KEY', '')}",
+            f"GEMINI_API_KEY={env_vars.get('GEMINI_API_KEY', '')}",
+            f"SERPER_API_KEY={env_vars.get('SERPER_API_KEY', '')}",
+            "",
+            "# Other Settings",
+            f"METABASE_URL={env_vars.get('METABASE_URL', 'http://metabase:3000')}",
+        ]
+        
+        env_path.write_text("\n".join(output_lines) + "\n")
         
         # Log activity
         conn = get_db_connection()
