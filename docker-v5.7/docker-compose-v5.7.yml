@@ -1,18 +1,19 @@
+# PE Sourcing Engine v5.7 - Docker Compose
+# Standardized configuration matching dg production environment
+
 services:
   # PostgreSQL Database
   db:
     image: postgres:15-alpine
     container_name: pe-sourcing-db-v57
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
       POSTGRES_USER: ${DB_USER:-pe_sourcer}
       POSTGRES_PASSWORD: ${DB_PASS:-changeme}
       POSTGRES_DB: ${DB_NAME:-pe_sourcing_db}
     volumes:
       - postgres_data_v57:/var/lib/postgresql/data
-      - ../schema/current.sql:/docker-entrypoint-initdb.d/schema.sql
+      - ../schema/current.sql:/docker-entrypoint-initdb.d/01-schema.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pe_sourcer} -d ${DB_NAME:-pe_sourcing_db}"]
       interval: 10s
@@ -29,29 +30,37 @@ services:
     container_name: pe-sourcing-app-v57
     restart: unless-stopped
     ports:
-      - "8000:8000"               # Expose FastAPI directly on host port 8000
-    env_file:
-      - .env
+      - "8000:8000"
     environment:
+      # Database
       DB_HOST: db
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-pe_sourcing_db}
       DB_USER: ${DB_USER:-pe_sourcer}
       DB_PASS: ${DB_PASS:-changeme}
-      GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY}
-      GOOGLE_GEMINI_API_KEY: ${GOOGLE_GEMINI_API_KEY}
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
-      SERPER_API_KEY: ${SERPER_API_KEY}
+      # Authentication
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      CSRF_SECRET: ${CSRF_SECRET}
+      # API Keys - Only GEMINI_API_KEY (not GOOGLE_GEMINI_API_KEY)
+      GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      SERPER_API_KEY: ${SERPER_API_KEY:-}
     volumes:
-      - app_data_v57:/app/logs
-      - config_generated_v57:/app/config
+      - app_logs_v57:/app/logs
+      - app_config_v57:/app/config
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     networks:
       - pe-network-v57
 
-  # Metabase Analytics
+  # Metabase Analytics (Optional)
   metabase:
     image: metabase/metabase:latest
     container_name: pe-sourcing-metabase-v57
@@ -72,6 +81,8 @@ services:
         condition: service_healthy
     networks:
       - pe-network-v57
+    profiles:
+      - with-metabase
 
   # Caddy Web Server (Optional - for HTTPS)
   caddy:
@@ -87,7 +98,6 @@ services:
       - caddy_config_v57:/config
     depends_on:
       - app
-      - metabase
     networks:
       - pe-network-v57
     profiles:
@@ -95,17 +105,11 @@ services:
 
 volumes:
   postgres_data_v57:
-    driver: local
   metabase_data_v57:
-    driver: local
-  app_data_v57:
-    driver: local
-  config_generated_v57:
-    driver: local
+  app_logs_v57:
+  app_config_v57:
   caddy_data_v57:
-    driver: local
   caddy_config_v57:
-    driver: local
 
 networks:
   pe-network-v57:

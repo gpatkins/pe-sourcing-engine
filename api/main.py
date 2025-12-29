@@ -1236,9 +1236,8 @@ async def update_env_vars(
             updated_keys.append('GOOGLE_PLACES_API_KEY')
         
         if google_gemini_api_key.strip():
-            env_vars['GOOGLE_GEMINI_API_KEY'] = google_gemini_api_key.strip()
-            env_vars['GEMINI_API_KEY'] = google_gemini_api_key.strip()  # Compatibility
-            updated_keys.append('GOOGLE_GEMINI_API_KEY')
+            env_vars['GEMINI_API_KEY'] = google_gemini_api_key.strip()
+            updated_keys.append('GEMINI_API_KEY')
         
         if serper_api_key.strip():
             env_vars['SERPER_API_KEY'] = serper_api_key.strip()
