@@ -1,5 +1,5 @@
 # PE Sourcing Engine v5.7 - Docker Compose
-# Standardized configuration matching dg production environment
+# Simplified setup - works exactly like dg
 
 services:
   # PostgreSQL Database
@@ -8,21 +8,21 @@ services:
     container_name: pe-sourcing-db-v57
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DB_USER:-pe_sourcer}
-      POSTGRES_PASSWORD: ${DB_PASS:-changeme}
-      POSTGRES_DB: ${DB_NAME:-pe_sourcing_db}
+      POSTGRES_USER: pe_sourcer
+      POSTGRES_PASSWORD: ${DB_PASS:-shadow27}
+      POSTGRES_DB: pe_sourcing_db
     volumes:
       - postgres_data_v57:/var/lib/postgresql/data
       - ../schema/current.sql:/docker-entrypoint-initdb.d/01-schema.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pe_sourcer} -d ${DB_NAME:-pe_sourcing_db}"]
+      test: ["CMD-SHELL", "pg_isready -U pe_sourcer -d pe_sourcing_db"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - pe-network-v57
 
-  # FastAPI Application (Dashboard + Pipeline)
+  # FastAPI Application
   app:
     build:
       context: ..
@@ -32,22 +32,21 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # Database
+      # Only DB connection and auth secrets from environment
+      # API keys are read directly from secrets.env file by Python
       DB_HOST: db
       DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-pe_sourcing_db}
-      DB_USER: ${DB_USER:-pe_sourcer}
-      DB_PASS: ${DB_PASS:-changeme}
-      # Authentication
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
-      CSRF_SECRET: ${CSRF_SECRET}
-      # API Keys - Only GEMINI_API_KEY (not GOOGLE_GEMINI_API_KEY)
-      GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY:-}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      SERPER_API_KEY: ${SERPER_API_KEY:-}
+      DB_NAME: pe_sourcing_db
+      DB_USER: pe_sourcer
+      DB_PASS: ${DB_PASS:-shadow27}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-changeme-in-production}
+      CSRF_SECRET: ${CSRF_SECRET:-changeme-in-production}
     volumes:
-      - app_logs_v57:/app/logs
-      - app_config_v57:/app/config
+      # BIND MOUNT - not a Docker volume
+      # This means ./config/secrets.env on host = /app/config/secrets.env in container
+      # Admin dashboard edits persist and take effect immediately
+      - ./config:/app/config
+      - ./logs:/app/logs
     depends_on:
       db:
         condition: service_healthy
@@ -59,30 +58,6 @@ services:
       start_period: 40s
     networks:
       - pe-network-v57
-
-  # Metabase Analytics (Optional)
-  metabase:
-    image: metabase/metabase:latest
-    container_name: pe-sourcing-metabase-v57
-    restart: unless-stopped
-    ports:
-      - "3001:3000"
-    environment:
-      MB_DB_TYPE: postgres
-      MB_DB_DBNAME: ${DB_NAME:-pe_sourcing_db}
-      MB_DB_PORT: 5432
-      MB_DB_USER: ${DB_USER:-pe_sourcer}
-      MB_DB_PASS: ${DB_PASS:-changeme}
-      MB_DB_HOST: db
-    volumes:
-      - metabase_data_v57:/metabase-data
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - pe-network-v57
-    profiles:
-      - with-metabase
 
   # Caddy Web Server (Optional - for HTTPS)
   caddy:
@@ -105,9 +80,6 @@ services:
 
 volumes:
   postgres_data_v57:
-  metabase_data_v57:
-  app_logs_v57:
-  app_config_v57:
   caddy_data_v57:
   caddy_config_v57:
 
