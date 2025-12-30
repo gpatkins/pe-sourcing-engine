@@ -179,9 +179,17 @@
                         <h3 class="text-base font-semibold leading-6 text-gray-900">Scale Generator Locations</h3>
                         <p class="mt-1 text-sm text-gray-500">Manage cities/states used by the Scale Generator</p>
                     </div>
-                    <button onclick="showAddLocationModal()" class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
-                        + Add Location
-                    </button>
+                    <div class="flex gap-2">
+                        <button onclick="loadDefaultCapitals()" class="inline-flex items-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500">
+                            🏛️ Load US Capitals
+                        </button>
+                        <button onclick="deleteAllLocations()" class="inline-flex items-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500">
+                            🗑️ Delete All
+                        </button>
+                        <button onclick="showAddLocationModal()" class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+                            + Add Location
+                        </button>
+                    </div>
                 </div>
 
                 <div id="locations-loading" class="text-center py-8">
@@ -379,6 +387,42 @@ function deleteLocation(id) {
                 alert('❌ ' + data.message);
             }
         });
+    }
+}
+
+function deleteAllLocations() {
+    if (confirm('⚠️ Are you sure you want to delete ALL locations?\n\nThis cannot be undone.')) {
+        fetch('/api/scale-generator/locations', {
+            method: 'DELETE'
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                loadLocations();
+                alert('✅ ' + data.message);
+            } else {
+                alert('❌ ' + data.message);
+            }
+        })
+        .catch(err => alert('❌ Network error'));
+    }
+}
+
+function loadDefaultCapitals() {
+    if (confirm('Load all 50 US state capitals?\n\nExisting locations will be preserved (no duplicates).')) {
+        fetch('/api/scale-generator/locations/load-defaults', {
+            method: 'POST'
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                loadLocations();
+                alert('✅ ' + data.message);
+            } else {
+                alert('❌ ' + data.message);
+            }
+        })
+        .catch(err => alert('❌ Network error'));
     }
 }
 </script>

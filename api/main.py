@@ -689,13 +689,71 @@ async def export_companies_csv(request: Request, current_user: dict = Depends(ge
 
     sql = f"""
         SELECT
-            name, url, phone, address, city, state, zip,
-            industry_tag, customer_type, revenue_estimate, buyability_score,
-            is_family_owned, is_franchise, owner_name, owner_phone,
-            linkedin_company_url, owner_linkedin_url, founder_email,
-            risk_flags, legal_name, naics_code, naics_description,
-            website_tech_stack, google_rating, google_reviews,
-            created_at, last_enriched_at
+            -- Core Identity
+            id,
+            name,
+            legal_name,
+            url,
+            description,
+            
+            -- Location & Contact
+            phone,
+            address,
+            city,
+            state,
+            zip,
+            country,
+            
+            -- Business Classification
+            industry_tag,
+            naics_code,
+            naics_description,
+            customer_type,
+            revenue_model,
+            is_ecommerce,
+            is_franchise,
+            is_family_owned,
+            
+            -- Financial Metrics
+            revenue_estimate,
+            employee_count,
+            buyability_score,
+            
+            -- Ownership & Leadership
+            owner_name,
+            owner_phone,
+            founder_email,
+            owner_source,
+            
+            -- Digital Presence
+            linkedin_company_url,
+            owner_linkedin_url,
+            hiring_page_url,
+            facebook_url,
+            instagram_url,
+            twitter_url,
+            youtube_url,
+            
+            -- Technology & Metrics
+            website_tech_stack,
+            google_rating,
+            google_reviews,
+            
+            -- Risk Analysis
+            risk_flags,
+            recent_news,
+            
+            -- AI Metadata
+            ai_confidence,
+            ai_evidence,
+            
+            -- System Metadata
+            enrichment_status,
+            date_added,
+            created_at,
+            updated_at,
+            last_enriched_at,
+            user_id
         FROM companies
         {where_clause}
         ORDER BY buyability_score DESC NULLS LAST, created_at DESC
@@ -716,7 +774,7 @@ async def export_companies_csv(request: Request, current_user: dict = Depends(ge
                 if hasattr(value, 'strftime'):
                     row[key] = value.strftime('%Y-%m-%d %H:%M:%S')
                 elif isinstance(value, (dict, list)):
-                    row[key] = str(value)
+                    row[key] = json.dumps(value) if value else ''
                 else:
                     row[key] = value
             writer.writerow(row)
@@ -773,13 +831,71 @@ async def export_companies_excel(request: Request, current_user: dict = Depends(
 
     sql = f"""
         SELECT
-            name, url, phone, address, city, state, zip,
-            industry_tag, customer_type, revenue_estimate, buyability_score,
-            is_family_owned, is_franchise, owner_name, owner_phone,
-            linkedin_company_url, owner_linkedin_url, founder_email,
-            risk_flags, legal_name, naics_code, naics_description,
-            website_tech_stack, google_rating, google_reviews,
-            created_at, last_enriched_at
+            -- Core Identity
+            id,
+            name,
+            legal_name,
+            url,
+            description,
+            
+            -- Location & Contact
+            phone,
+            address,
+            city,
+            state,
+            zip,
+            country,
+            
+            -- Business Classification
+            industry_tag,
+            naics_code,
+            naics_description,
+            customer_type,
+            revenue_model,
+            is_ecommerce,
+            is_franchise,
+            is_family_owned,
+            
+            -- Financial Metrics
+            revenue_estimate,
+            employee_count,
+            buyability_score,
+            
+            -- Ownership & Leadership
+            owner_name,
+            owner_phone,
+            founder_email,
+            owner_source,
+            
+            -- Digital Presence
+            linkedin_company_url,
+            owner_linkedin_url,
+            hiring_page_url,
+            facebook_url,
+            instagram_url,
+            twitter_url,
+            youtube_url,
+            
+            -- Technology & Metrics
+            website_tech_stack,
+            google_rating,
+            google_reviews,
+            
+            -- Risk Analysis
+            risk_flags,
+            recent_news,
+            
+            -- AI Metadata
+            ai_confidence,
+            ai_evidence,
+            
+            -- System Metadata
+            enrichment_status,
+            date_added,
+            created_at,
+            updated_at,
+            last_enriched_at,
+            user_id
         FROM companies
         {where_clause}
         ORDER BY buyability_score DESC NULLS LAST, created_at DESC
@@ -808,13 +924,26 @@ async def export_companies_excel(request: Request, current_user: dict = Depends(
         for row_num, company in enumerate(companies, 2):
             for col_num, header in enumerate(headers, 1):
                 value = company[header]
-                # Convert datetime objects to strings
-                if hasattr(value, 'strftime'):
-                    value = value.strftime('%Y-%m-%d %H:%M:%S')
-                # Convert JSONB/dict to string
+                
+                # Convert all problematic types to Excel-safe values
+                if value is None:
+                    cell_value = ""
+                elif hasattr(value, 'strftime'):
+                    # datetime or date objects
+                    cell_value = value.strftime('%Y-%m-%d %H:%M:%S') if hasattr(value, 'hour') else value.strftime('%Y-%m-%d')
                 elif isinstance(value, (dict, list)):
-                    value = str(value)
-                ws.cell(row=row_num, column=col_num, value=value)
+                    # JSONB fields
+                    cell_value = json.dumps(value) if value else ""
+                elif hasattr(value, 'hex'):
+                    # UUID objects - convert to string
+                    cell_value = str(value)
+                elif isinstance(value, (int, float, bool)):
+                    # Keep numeric types as-is
+                    cell_value = value
+                else:
+                    cell_value = str(value) if value else ""
+                
+                ws.cell(row=row_num, column=col_num, value=cell_value)
 
         # Auto-adjust column widths
         for column in ws.columns:
@@ -1063,6 +1192,109 @@ async def delete_scale_generator_location(
         return JSONResponse({"success": True, "message": "Location deleted"})
     except Exception as e:
         return JSONResponse({"success": False, "message": str(e)}, status_code=500)
+    
+@app.delete("/api/scale-generator/locations")
+async def delete_all_scale_generator_locations(current_user: dict = Depends(get_current_active_user)):
+    """Delete ALL scale generator locations."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("DELETE FROM scale_generator_config")
+        deleted_count = cur.rowcount
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return JSONResponse({"success": True, "message": f"Deleted {deleted_count} locations"})
+    except Exception as e:
+        return JSONResponse({"success": False, "message": str(e)}, status_code=500)
+
+@app.post("/api/scale-generator/locations/load-defaults")
+async def load_default_scale_generator_locations(current_user: dict = Depends(get_current_active_user)):
+    """Load default locations: capital city of each US state."""
+    try:
+        # All 50 US state capitals
+        state_capitals = [
+            ('Montgomery', 'AL'),
+            ('Juneau', 'AK'),
+            ('Phoenix', 'AZ'),
+            ('Little Rock', 'AR'),
+            ('Sacramento', 'CA'),
+            ('Denver', 'CO'),
+            ('Hartford', 'CT'),
+            ('Dover', 'DE'),
+            ('Tallahassee', 'FL'),
+            ('Atlanta', 'GA'),
+            ('Honolulu', 'HI'),
+            ('Boise', 'ID'),
+            ('Springfield', 'IL'),
+            ('Indianapolis', 'IN'),
+            ('Des Moines', 'IA'),
+            ('Topeka', 'KS'),
+            ('Frankfort', 'KY'),
+            ('Baton Rouge', 'LA'),
+            ('Augusta', 'ME'),
+            ('Annapolis', 'MD'),
+            ('Boston', 'MA'),
+            ('Lansing', 'MI'),
+            ('Saint Paul', 'MN'),
+            ('Jackson', 'MS'),
+            ('Jefferson City', 'MO'),
+            ('Helena', 'MT'),
+            ('Lincoln', 'NE'),
+            ('Carson City', 'NV'),
+            ('Concord', 'NH'),
+            ('Trenton', 'NJ'),
+            ('Santa Fe', 'NM'),
+            ('Albany', 'NY'),
+            ('Raleigh', 'NC'),
+            ('Bismarck', 'ND'),
+            ('Columbus', 'OH'),
+            ('Oklahoma City', 'OK'),
+            ('Salem', 'OR'),
+            ('Harrisburg', 'PA'),
+            ('Providence', 'RI'),
+            ('Columbia', 'SC'),
+            ('Pierre', 'SD'),
+            ('Nashville', 'TN'),
+            ('Austin', 'TX'),
+            ('Salt Lake City', 'UT'),
+            ('Montpelier', 'VT'),
+            ('Richmond', 'VA'),
+            ('Olympia', 'WA'),
+            ('Charleston', 'WV'),
+            ('Madison', 'WI'),
+            ('Cheyenne', 'WY'),
+        ]
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        added_count = 0
+        for city, state in state_capitals:
+            try:
+                cur.execute("""
+                    INSERT INTO scale_generator_config (city, state, is_active)
+                    VALUES (%s, %s, true)
+                    ON CONFLICT (city, state) DO NOTHING
+                """, (city, state))
+                if cur.rowcount > 0:
+                    added_count += 1
+            except:
+                pass  # Skip duplicates
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return JSONResponse({
+            "success": True, 
+            "message": f"Added {added_count} state capitals (skipped existing)"
+        })
+    except Exception as e:
+        return JSONResponse({"success": False, "message": str(e)}, status_code=500)
 
 # ============================================================================
 # PIPELINE EXECUTION ROUTES
@@ -1206,6 +1438,33 @@ async def download_pipeline_logs(current_user: dict = Depends(get_current_active
 # ADMIN: ENVIRONMENT VARIABLES & SYSTEM MANAGEMENT (v5.3)
 # ============================================================================
 
+@app.get("/api/admin/api-keys")
+async def get_current_api_keys(admin: dict = Depends(require_admin)):
+    """Get current API key values (admin only)."""
+    try:
+        env_path = BASE_DIR / "config" / "secrets.env"
+        
+        env_vars = {}
+        if env_path.exists():
+            with open(env_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, value = line.split('=', 1)
+                        env_vars[key.strip()] = value.strip()
+        
+        return JSONResponse({
+            "success": True,
+            "keys": {
+                "GOOGLE_PLACES_API_KEY": env_vars.get("GOOGLE_PLACES_API_KEY", ""),
+                "GEMINI_API_KEY": env_vars.get("GEMINI_API_KEY", ""),
+                "SERPER_API_KEY": env_vars.get("SERPER_API_KEY", ""),
+                "METABASE_URL": env_vars.get("METABASE_URL", ""),
+            }
+        })
+    except Exception as e:
+        return JSONResponse({"success": False, "message": str(e)}, status_code=500)
+
 @app.post("/admin/env-vars/update")
 async def update_env_vars(
     request: Request,
@@ -1232,7 +1491,7 @@ async def update_env_vars(
         # PROTECTED KEYS - These must never be changed by the admin UI
         # Ensure Docker-compatible defaults are always set
         protected_defaults = {
-            'DB_HOST': 'db',           # Docker container name, not localhost
+            'DB_HOST': 'localhost',          
             'DB_PORT': '5432',
             'DB_NAME': env_vars.get('DB_NAME', 'pe_sourcing_db'),
             'DB_USER': env_vars.get('DB_USER', 'pe_sourcer'),
@@ -1241,10 +1500,7 @@ async def update_env_vars(
         
         # Apply protected defaults (preserve existing DB_PASS if set)
         for key, default_value in protected_defaults.items():
-            if key == 'DB_HOST':
-                # Always force DB_HOST to 'db' for Docker compatibility
-                env_vars[key] = 'db'
-            elif key not in env_vars or not env_vars[key]:
+            if key not in env_vars or not env_vars[key]:
                 env_vars[key] = default_value
         
         # Update only non-empty API key values

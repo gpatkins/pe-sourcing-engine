@@ -115,40 +115,8 @@
                                         <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0">
                                             <div class="flex justify-end gap-2">
                                                 {% if user.id != current_user.user_id %}
-                                                <!-- Toggle Active/Inactive -->
-                                                <form action="/admin/users/toggle-status/{{ user.id }}" method="POST" class="inline">
-                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                                                    <button type="submit"
-                                                            class="text-indigo-600 hover:text-indigo-900"
-                                                            title="{% if user.is_active %}Deactivate{% else %}Activate{% endif %} user">
-                                                        {% if user.is_active %}
-                                                        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                            <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-                                                        </svg>
-                                                        {% else %}
-                                                        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                            <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" />
-                                                        </svg>
-                                                        {% endif %}
-                                                    </button>
-                                                </form>
-
-                                                <!-- Reset Password -->
-                                                <form action="/admin/users/reset-password/{{ user.id }}" method="POST" class="inline"
-                                                      onsubmit="return confirm('Reset password for {{ user.email }}? A temporary password will be generated.');">
-                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                                                    <button type="submit"
-                                                            class="text-yellow-600 hover:text-yellow-900"
-                                                            title="Reset password">
-                                                        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                            <path fill-rule="evenodd" d="M10 1a4.5 4.5 0 0 0-4.5 4.5V9H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-.5V5.5A4.5 4.5 0 0 0 10 1Zm3 8V5.5a3 3 0 1 0-6 0V9h6Z" clip-rule="evenodd" />
-                                                        </svg>
-                                                    </button>
-                                                </form>
-
-                                                <!-- Delete User -->
-                                                <form action="/admin/users/delete/{{ user.id }}" method="POST" class="inline"
-                                                      onsubmit="return confirm('Delete user {{ user.email }}? This action cannot be undone.');">
+                                                <form action="/admin/users/{{ user.id }}/delete" method="POST" class="inline"
+                                                      onsubmit="return confirm('Are you sure you want to delete this user? This action cannot be undone.');">
                                                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                                     <button type="submit"
                                                             class="text-red-600 hover:text-red-900"
@@ -187,12 +155,21 @@
                 <h3 class="text-base font-semibold leading-6 text-gray-900 mb-2 flex items-center">
                     🔐 API Keys (secrets.env)
                 </h3>
-                <p class="text-sm text-gray-600 mb-2">
+                <p class="text-sm text-gray-600 mb-4">
                     Update API keys used by the discovery and enrichment pipeline. These are stored in
                     <code class="text-xs bg-gray-100 px-1 py-0.5 rounded">config/secrets.env</code>
                     and read by all ETL scripts.
                 </p>
-                <p class="text-xs text-orange-600 mb-6">
+
+                <!-- Current API Keys Display -->
+                <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <h4 class="text-sm font-medium text-gray-700 mb-3">Current API Keys</h4>
+                    <div class="space-y-3" id="current-keys-container">
+                        <p class="text-sm text-gray-500">Loading...</p>
+                    </div>
+                </div>
+
+                <p class="text-xs text-orange-600 mb-4">
                     ⚠️ <strong>Important:</strong> Leave fields empty to keep existing values. Requires application restart to take effect.
                 </p>
 
@@ -208,7 +185,7 @@
                                    name="google_places_api_key"
                                    id="google_places_api_key"
                                    class="mt-1 block w-full bg-white rounded-md border-0 py-2 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm"
-                                   placeholder="AIza...">
+                                   placeholder="Enter new key to update...">
                         </div>
 
                         <div>
@@ -219,7 +196,7 @@
                                    name="google_gemini_api_key"
                                    id="google_gemini_api_key"
                                    class="mt-1 block w-full bg-white rounded-md border-0 py-2 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm"
-                                   placeholder="AIza...">
+                                   placeholder="Enter new key to update...">
                         </div>
 
                         <div>
@@ -230,7 +207,7 @@
                                    name="serper_api_key"
                                    id="serper_api_key"
                                    class="mt-1 block w-full bg-white rounded-md border-0 py-2 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm"
-                                   placeholder="your-serper-key">
+                                   placeholder="Enter new key to update...">
                         </div>
 
                         <div>
@@ -241,7 +218,7 @@
                                    name="metabase_url"
                                    id="metabase_url"
                                    class="mt-1 block w-full bg-white rounded-md border-0 py-2 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm"
-                                   placeholder="http://localhost:3000">
+                                   placeholder="Enter new URL to update...">
                         </div>
                     </div>
 
@@ -251,7 +228,7 @@
                             <svg class="-ml-0.5 mr-1.5 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                 <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" />
                             </svg>
-                            Update Environment Variables
+                            Update API Keys
                         </button>
                         <span class="text-xs text-gray-500">
                             ⚠️ Restart required after update
@@ -273,88 +250,19 @@
                             Free system resources by restarting Docker containers, vacuuming the database, and dropping system cache.
                             <strong class="text-red-600">Warning:</strong> This will temporarily interrupt service.
                         </p>
-
-                        <div class="bg-gray-50 rounded-lg p-4 mb-4 text-xs font-mono text-gray-700">
-                            <p class="mb-1"><strong>Actions performed:</strong></p>
-                            <ul class="list-disc list-inside space-y-1 ml-2">
-                                <li>Restart application container (kills zombie processes)</li>
-                                <li>Run VACUUM FULL on PostgreSQL database</li>
-                                <li>Drop Linux system cache (page cache, dentries, inodes)</li>
-                                <li>Display current memory usage</li>
-                            </ul>
-                        </div>
-
-                        <div id="cleanup-result" class="hidden mb-4"></div>
                     </div>
+                    <form action="/admin/system/cleanup" method="POST" class="ml-4">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <button type="submit"
+                                class="inline-flex items-center rounded-md bg-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-500"
+                                onclick="return confirm('This will reset pipeline state and clean up system resources. Continue?');">
+                            Run Cleanup
+                        </button>
+                    </form>
                 </div>
-
-                <div class="flex items-center gap-3">
-                    <button onclick="runSystemCleanup()"
-                            id="cleanup-btn"
-                            class="inline-flex items-center rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 focus:outline-2 focus:outline-red-600">
-                        <svg class="-ml-0.5 mr-1.5 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clip-rule="evenodd" />
-                        </svg>
-                        Run System Cleanup
-                    </button>
-                    <span class="text-xs text-gray-500">
-                        Est. time: 30-60 seconds
-                    </span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Restart Application -->
-        <div class="mt-8 bg-white shadow sm:rounded-lg">
-            <div class="px-4 py-5 sm:p-6">
-                <div class="flex items-start justify-between">
-                    <div class="flex-1">
-                        <h3 class="text-base font-semibold leading-6 text-gray-900 mb-2">
-                            🔄 Restart Application
-                        </h3>
-                        <p class="text-sm text-gray-600 mb-4">
-                            Restart the application to apply configuration changes (e.g., after updating API keys in secrets.env).
-                            Auto-detects environment (systemd vs Docker).
-                        </p>
-
-                        <div class="bg-yellow-50 rounded-lg p-4 mb-4 border border-yellow-200">
-                            <div class="flex">
-                                <div class="flex-shrink-0">
-                                    <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd" />
-                                    </svg>
-                                </div>
-                                <div class="ml-3">
-                                    <h4 class="text-sm font-medium text-yellow-800">⚠️ Important Warnings</h4>
-                                    <div class="mt-2 text-sm text-yellow-700">
-                                        <ul class="list-disc list-inside space-y-1">
-                                            <li>Ensure NO discovery or enrichment pipelines are running</li>
-                                            <li>Application will restart in ~1 minute (using 'at' scheduler)</li>
-                                            <li>You will need to refresh the page after restart</li>
-                                            <li>All users will be logged out and need to re-login</li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div id="restart-result" class="hidden mb-4"></div>
-                    </div>
-                </div>
-
-                <div class="flex items-center gap-3">
-                    <button onclick="restartApplication()"
-                            id="restart-btn"
-                            class="inline-flex items-center rounded-md bg-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-500 focus:outline-2 focus:outline-orange-600">
-                        <svg class="-ml-0.5 mr-1.5 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0V5.36l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z" clip-rule="evenodd" />
-                        </svg>
-                        Restart Application
-                    </button>
-                    <span class="text-xs text-gray-500">
-                        Est. downtime: 5-10 seconds
-                    </span>
-                </div>
+                <p class="text-xs text-gray-500 mt-2">
+                    Expected downtime: 5-10 seconds
+                </p>
             </div>
         </div>
 
@@ -386,7 +294,7 @@
                                             </p>
                                         </div>
                                         <div class="whitespace-nowrap text-right text-sm text-gray-500">
-                                            <time datetime="{{ activity.created_at.isoformat() }}">{{ activity.created_at.strftime('%b %d, %I:%M %p') }}</time>
+                                            <time>{{ activity.created_at.strftime('%b %d, %H:%M') if activity.created_at else 'N/A' }}</time>
                                         </div>
                                     </div>
                                 </div>
@@ -396,7 +304,7 @@
 
                         {% if not recent_activity %}
                         <li class="text-center text-sm text-gray-500 py-4">
-                            No recent activity
+                            No recent activity to display.
                         </li>
                         {% endif %}
                     </ul>
@@ -407,197 +315,82 @@
 </div>
 
 <script>
-async function runSystemCleanup() {
-    const btn = document.getElementById('cleanup-btn');
-    const resultDiv = document.getElementById('cleanup-result');
+document.addEventListener('DOMContentLoaded', function() {
+    loadCurrentApiKeys();
+});
 
-    if (!confirm('⚠️ This will temporarily interrupt service and restart containers. Continue?')) {
-        return;
-    }
-
-    btn.disabled = true;
-    btn.innerHTML = `
-        <svg class="animate-spin -ml-0.5 mr-1.5 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        Running Cleanup...
-    `;
-
-    resultDiv.className = 'hidden';
-
-    try {
-        const response = await fetch('/admin/system/cleanup', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+function loadCurrentApiKeys() {
+    fetch('/api/admin/api-keys')
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                renderApiKeys(data.keys);
+            } else {
+                document.getElementById('current-keys-container').innerHTML = 
+                    '<p class="text-sm text-red-600">Failed to load API keys</p>';
+            }
+        })
+        .catch(err => {
+            document.getElementById('current-keys-container').innerHTML = 
+                '<p class="text-sm text-red-600">Error loading API keys</p>';
         });
-
-        const data = await response.json();
-
-        if (data.success) {
-            resultDiv.className = 'rounded-md bg-green-50 p-4 border border-green-200';
-            resultDiv.innerHTML = `
-                <div class="flex">
-                    <div class="flex-shrink-0">
-                        <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clip-rule="evenodd" />
-                        </svg>
-                    </div>
-                    <div class="ml-3 flex-1">
-                        <h3 class="text-sm font-medium text-green-800">Cleanup Successful</h3>
-                        <div class="mt-2 text-sm text-green-700">
-                            <p>${data.message}</p>
-                            ${data.output ? `<pre class="mt-2 text-xs bg-green-100 p-2 rounded overflow-x-auto">${data.output}</pre>` : ''}
-                        </div>
-                        <p class="mt-2 text-xs text-green-600">Completed at: ${new Date(data.timestamp).toLocaleString()}</p>
-                    </div>
-                </div>
-            `;
-        } else {
-            resultDiv.className = 'rounded-md bg-red-50 p-4 border border-red-200';
-            resultDiv.innerHTML = `
-                <div class="flex">
-                    <div class="flex-shrink-0">
-                        <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM8.28 7.22a.75.75 0 0 0-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 1 0 1.06 1.06L10 11.06l1.72 1.72a.75.75 0 1 0 1.06-1.06L11.06 10l1.72-1.72a.75.75 0 0 0-1.06-1.06L10 8.94 8.28 7.22Z" clip-rule="evenodd" />
-                        </svg>
-                    </div>
-                    <div class="ml-3 flex-1">
-                        <h3 class="text-sm font-medium text-red-800">Cleanup Failed</h3>
-                        <div class="mt-2 text-sm text-red-700">
-                            <p>${data.message}</p>
-                            ${data.error ? `<pre class="mt-2 text-xs bg-red-100 p-2 rounded overflow-x-auto">${data.error}</pre>` : ''}
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-    } catch (error) {
-        resultDiv.className = 'rounded-md bg-red-50 p-4 border border-red-200';
-        resultDiv.innerHTML = `
-            <div class="flex">
-                <div class="flex-shrink-0">
-                    <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM8.28 7.22a.75.75 0 0 0-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 1 0 1.06 1.06L10 11.06l1.72 1.72a.75.75 0 1 0 1.06-1.06L11.06 10l1.72-1.72a.75.75 0 0 0-1.06-1.06L10 8.94 8.28 7.22Z" clip-rule="evenodd" />
-                    </svg>
-                </div>
-                <div class="ml-3">
-                    <h3 class="text-sm font-medium text-red-800">Request Failed</h3>
-                    <div class="mt-2 text-sm text-red-700">
-                        <p>Error: ${error.message}</p>
-                    </div>
-                </div>
-            </div>
-        `;
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = `
-            <svg class="-ml-0.5 mr-1.5 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clip-rule="evenodd" />
-            </svg>
-            Run System Cleanup
-        `;
-    }
 }
 
-async function restartApplication() {
-    const btn = document.getElementById('restart-btn');
-    const resultDiv = document.getElementById('restart-result');
-
-    if (!confirm('⚠️ WARNING: This will restart the application and all users will be logged out.\n\nAre you sure NO pipelines are running?')) {
-        return;
-    }
-    if (!confirm('⚠️ FINAL CONFIRMATION: Application will be unavailable for 5-10 seconds.\n\nProceed with restart?')) {
-        return;
-    }
-
-    btn.disabled = true;
-    btn.innerHTML = `
-        <svg class="animate-spin -ml-0.5 mr-1.5 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        Restarting...
-    `;
-
-    resultDiv.className = 'hidden';
-
-    try {
-        const response = await fetch('/admin/app/restart', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            resultDiv.className = 'rounded-md bg-blue-50 p-4 border border-blue-200';
-            resultDiv.innerHTML = `
-                <div class="flex">
-                    <div class="flex-shrink-0">
-                        <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 9a.75.75 0 0 0 0 1.5h.253a.25.25 0 0 1 .244.304l-.459 2.066A1.75 1.75 0 0 0 10.747 15H11a.75.75 0 0 0 0-1.5h-.253a.25.25 0 0 1-.244-.304l.459-2.066A1.75 1.75 0 0 0 9.253 9H9Z" clip-rule="evenodd" />
-                        </svg>
-                    </div>
-                    <div class="ml-3 flex-1">
-                        <h3 class="text-sm font-medium text-blue-800">Restart Scheduled</h3>
-                        <div class="mt-2 text-sm text-blue-700">
-                            <p>${data.message}</p>
-                            <p class="mt-2"><strong>Environment:</strong> ${data.environment}</p>
-                            <p><strong>Command:</strong> <code class="bg-blue-100 px-1 py-0.5 rounded text-xs">${data.command}</code></p>
-                            <p class="mt-3 font-semibold">⏳ Application will restart in ~1 minute...</p>
-                            <p class="text-xs mt-1">Page will reload automatically in 70 seconds.</p>
-                        </div>
-                    </div>
+function renderApiKeys(keys) {
+    const container = document.getElementById('current-keys-container');
+    const keyLabels = {
+        'GOOGLE_PLACES_API_KEY': 'Google Places',
+        'GEMINI_API_KEY': 'Google Gemini',
+        'SERPER_API_KEY': 'Serper',
+        'METABASE_URL': 'Metabase URL'
+    };
+    
+    let html = '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">';
+    
+    for (const [key, label] of Object.entries(keyLabels)) {
+        const value = keys[key] || '';
+        const hasValue = value.length > 0;
+        const maskedValue = hasValue ? maskApiKey(value) : '<span class="text-gray-400 italic">Not set</span>';
+        const statusColor = hasValue ? 'text-green-600' : 'text-yellow-600';
+        const statusIcon = hasValue ? '✓' : '⚠';
+        
+        // Store the value in a data attribute to avoid escaping issues
+        const escapedValue = value.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+        
+        html += `
+            <div class="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                <div class="flex-1 min-w-0">
+                    <p class="text-xs font-medium text-gray-500">${label}</p>
+                    <p class="text-sm font-mono truncate" id="display-${key}">${maskedValue}</p>
                 </div>
-            `;
-
-            setTimeout(() => {
-                window.location.reload();
-            }, 70000);
-
-        } else {
-            resultDiv.className = 'rounded-md bg-red-50 p-4 border border-red-200';
-            resultDiv.innerHTML = `
-                <div class="flex">
-                    <div class="flex-shrink-0">
-                        <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM8.28 7.22a.75.75 0 0 0-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 1 0 1.06 1.06L10 11.06l1.72 1.72a.75.75 0 1 0 1.06-1.06L11.06 10l1.72-1.72a.75.75 0 0 0-1.06-1.06L10 8.94 8.28 7.22Z" clip-rule="evenodd" />
-                        </svg>
-                    </div>
-                    <div class="ml-3">
-                        <h3 class="text-sm font-medium text-red-800">Restart Failed</h3>
-                        <div class="mt-2 text-sm text-red-700">
-                            <p>${data.message}</p>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-    } catch (error) {
-        resultDiv.className = 'rounded-md bg-red-50 p-4 border border-red-200';
-        resultDiv.innerHTML = `
-            <div class="flex">
-                <div class="flex-shrink-0">
-                    <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM8.28 7.22a.75.75 0 0 0-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 1 0 1.06 1.06L10 11.06l1.72 1.72a.75.75 0 1 0 1.06-1.06L11.06 10l1.72-1.72a.75.75 0 0 0-1.06-1.06L10 8.94 8.28 7.22Z" clip-rule="evenodd" />
-                    </svg>
-                </div>
-                <div class="ml-3">
-                    <h3 class="text-sm font-medium text-red-800">Request Failed</h3>
-                    <div class="mt-2 text-sm text-red-700">
-                        <p>Error: ${error.message}</p>
-                        <p class="mt-2 text-xs">This may be expected if restart was successful. Try refreshing the page.</p>
-                    </div>
+                <div class="flex items-center gap-2 ml-2">
+                    <span class="${statusColor} text-sm">${statusIcon}</span>
+                    ${hasValue ? `<button type="button" onclick="toggleKey('${key}')" data-value="${escapedValue}" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium" id="toggle-${key}">Show</button>` : ''}
                 </div>
             </div>
         `;
+    }
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
 
-        setTimeout(() => {
-            window.location.reload();
-        }, 10000);
-    } finally {
-        // Don't re-enable button since we're restarting
+function maskApiKey(value) {
+    if (!value || value.length < 8) return '••••••••';
+    return value.substring(0, 4) + '••••••••' + value.substring(value.length - 4);
+}
+
+function toggleKey(key) {
+    const display = document.getElementById('display-' + key);
+    const toggle = document.getElementById('toggle-' + key);
+    const fullValue = toggle.getAttribute('data-value').replace(/&#39;/g, "'").replace(/&quot;/g, '"');
+    
+    if (toggle.textContent === 'Show') {
+        display.textContent = fullValue;
+        toggle.textContent = 'Hide';
+    } else {
+        display.innerHTML = maskApiKey(fullValue);
+        toggle.textContent = 'Show';
     }
 }
 </script>
