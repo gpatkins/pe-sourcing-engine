@@ -1,5 +1,5 @@
 """
-PE Sourcing Engine v5.4 - FastAPI Dashboard
+PE Sourcing Engine v5.7 - FastAPI Dashboard
 Main API application with JWT-based authentication and user management.
 """
 
@@ -1580,7 +1580,7 @@ async def system_cleanup(
     request: Request,
     admin: dict = Depends(require_admin)
 ):
-    """Run system cleanup - reset pipeline state and optionally run cleanup script."""
+    """Run system cleanup - reset pipeline state, drop cache, and restart service."""
     try:
         results = []
         
@@ -1609,32 +1609,32 @@ async def system_cleanup(
         except Exception as e:
             results.append(f"⚠️ Failed to reset progress file: {e}")
         
-        # 3. Run cleanup script if it exists (optional - for non-Docker environments)
+        # 3. Run cleanup script (drops memory cache)
         cleanup_script = BASE_DIR / "clean.sh"
         if cleanup_script.exists():
             try:
-                os.chmod(cleanup_script, 0o755)
                 result = subprocess.run(
-                    f'/bin/bash {cleanup_script}',
-                    shell=True,
+                    ['/usr/bin/bash', str(cleanup_script)],
                     capture_output=True,
                     text=True,
                     timeout=60
                 )
                 if result.returncode == 0:
-                    results.append("✅ Cleanup script completed")
-                    if result.stdout.strip():
-                        results.append(f"   Output: {result.stdout.strip()[:200]}")
+                    results.append("✅ Memory cache dropped")
+                    # Extract memory info from output
+                    for line in result.stdout.strip().split('\n'):
+                        if 'Mem:' in line or 'Swap:' in line:
+                            results.append(f"   {line.strip()}")
                 else:
-                    results.append(f"⚠️ Cleanup script failed: {result.stderr[:100]}")
+                    results.append(f"⚠️ Cleanup script warning: {result.stderr[:100]}")
             except subprocess.TimeoutExpired:
                 results.append("⚠️ Cleanup script timed out")
             except Exception as e:
                 results.append(f"⚠️ Cleanup script error: {e}")
         else:
-            results.append("ℹ️ No cleanup script found (clean.sh) - skipping")
+            results.append("ℹ️ No cleanup script found (clean.sh) - skipping memory purge")
         
-        # Log activity
+        # Log activity BEFORE restart
         conn = get_db_connection()
         log_user_activity(conn, admin["user_id"], ActivityType.SYSTEM_CLEANUP, {
             "timestamp": datetime.utcnow().isoformat(),
@@ -1642,10 +1642,29 @@ async def system_cleanup(
         })
         conn.close()
         
+        # 4. Fire-and-forget restart using nohup + shell backgrounding
+        # This detaches completely from the Python process
+        try:
+            subprocess.Popen(
+                'sleep 2 && sudo /usr/bin/systemctl restart pe-sourcing-gui.service',
+                shell=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL,
+                start_new_session=True
+            )
+            results.append("✅ Application service restart scheduled...")
+            results.append("⏳ Page will reload automatically in 5 seconds")
+            restart_triggered = True
+        except Exception as e:
+            results.append(f"⚠️ Service restart scheduling failed: {e}")
+            restart_triggered = False
+        
         return JSONResponse(content={
             "success": True,
             "message": "System cleanup completed",
             "output": "\n".join(results),
+            "restart_triggered": restart_triggered,
             "timestamp": datetime.utcnow().isoformat()
         })
             
@@ -1654,75 +1673,10 @@ async def system_cleanup(
             status_code=500,
             content={
                 "success": False,
-                "message": f"System cleanup error: {str(e)}"
+                "message": f"System cleanup error: {str(e)}",
+                "restart_triggered": False
             }
         )
-
-@app.post("/admin/app/restart")
-async def restart_application(
-    request: Request,
-    admin: dict = Depends(require_admin)
-):
-    """Restart the application (auto-detects development vs production environment)."""
-    try:
-        # Detect environment - PRIORITY ORDER MATTERS
-        # 1. Check if systemd service exists (development/dg server)
-        # 2. Check if actually running inside Docker container (production/docker-dg)
-        
-        environment = "unknown"
-        restart_command = None
-        
-        # First check: Is there a systemd service? (PRIORITY)
-        is_systemd = os.path.exists('/etc/systemd/system/pe-sourcing-gui.service') or \
-                     os.path.exists('/lib/systemd/system/pe-sourcing-gui.service')
-        
-        # Second check: Are we ACTUALLY running inside a Docker container?
-        # (not just having docker-compose.yml in the project directory)
-        is_inside_docker = os.path.exists('/.dockerenv') or \
-                          (os.path.exists('/proc/1/cgroup') and 
-                           any('docker' in line for line in open('/proc/1/cgroup', 'r').readlines()))
-        
-        # Determine environment and restart command (systemd takes priority)
-        if is_systemd and not is_inside_docker:
-            # Development server with systemd service
-            environment = "systemd"
-            restart_command = "sudo systemctl restart pe-sourcing-gui.service"
-        elif is_inside_docker:
-            # Production server running inside Docker
-            environment = "docker"
-            restart_command = "sudo docker compose restart app"
-        else:
-            # Fallback: try to detect from running processes
-            try:
-                result = subprocess.run(
-                    "systemctl is-active pe-sourcing-gui.service",
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-                if result.returncode == 0:
-                    # systemd service is active
-                    environment = "systemd"
-                    restart_command = "sudo systemctl restart pe-sourcing-gui.service"
-                else:
-                    # Assume Docker if systemd service not found
-                    environment = "docker"
-                    restart_command = "sudo docker compose restart app"
-            except:
-                # Final fallback - default to systemd as it's more common
-                environment = "systemd"
-                restart_command = "sudo systemctl restart pe-sourcing-gui.service"
-        
-        if not restart_command:
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "success": False,
-                    "message": "Could not detect environment (neither Docker nor systemd found)",
-                    "environment": environment
-                }
-            )
         
         # Log activity BEFORE restart (since we won't be able to after)
         conn = get_db_connection()
