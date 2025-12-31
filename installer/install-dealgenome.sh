@@ -130,7 +130,7 @@ echo ""
 echo -e "${BLUE}[3/11] Setting up PostgreSQL...${NC}"
 
 # Check if PostgreSQL is already initialized
-if [ -f /var/lib/pgsql/data/PG_VERSION ]; then
+if sudo test -f /var/lib/pgsql/data/PG_VERSION; then
     echo "PostgreSQL already initialized."
 else
     echo "Initializing PostgreSQL database..."
