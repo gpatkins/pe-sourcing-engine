@@ -4,7 +4,7 @@
 DealGenome is an automated deal sourcing platform designed for Private Equity. It discovers companies via Google Maps, enriches them with AI analysis, finds owner contact information, and scores them based on acquisition suitability ("Buyability Score").
 
 ## Version
-**Current Version:** 5.5
+**Current Version:** 5.8
 
 ## System Architecture
 * **Discovery:** Google Places API (Finds target companies)
@@ -246,6 +246,22 @@ This is a private repository. All development happens on the source server (dg) 
 - JWT tokens expire after 24 hours
 - Passwords hashed with bcrypt
 
+## Quick Install
+
+For fresh Fedora servers, use the installer scripts:
+```bash
+# Clone the repository
+git clone https://github.com/gpatkins/pe-sourcing-engine.git
+cd pe-sourcing-engine
+
+# Run the main installer
+./installer/install-dealgenome.sh
+
+# (Optional) Install Metabase analytics
+./installer/install-metabase.sh
+```
+
+See `installer/` directory for details.
 ## Support & Contact
 
 **Developer:** Gabriel Atkinson  
