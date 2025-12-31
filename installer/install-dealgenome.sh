@@ -221,6 +221,11 @@ echo -e "${BLUE}[5/11] Setting up application directory...${NC}"
 
 if [ -d "$INSTALL_DIR/.git" ]; then
     echo "Repository already exists. Pulling latest changes..."
+    # Fix ownership if needed (handles case where repo was cloned as root)
+    if [ ! -w "$INSTALL_DIR" ]; then
+        echo "Fixing directory permissions..."
+        sudo chown -R "$CURRENT_USER:$CURRENT_USER" "$INSTALL_DIR"
+    fi
     cd "$INSTALL_DIR"
     git pull origin main
 else
@@ -229,6 +234,9 @@ else
     sudo chown "$CURRENT_USER:$CURRENT_USER" "$INSTALL_DIR"
     git clone "$REPO_URL" "$INSTALL_DIR"
 fi
+
+# Ensure correct ownership of entire directory
+sudo chown -R "$CURRENT_USER:$CURRENT_USER" "$INSTALL_DIR"
 
 cd "$INSTALL_DIR"
 echo -e "${GREEN}✓ Application code ready at $INSTALL_DIR${NC}"
