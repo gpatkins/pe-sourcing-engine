@@ -68,7 +68,17 @@ if command -v docker &> /dev/null; then
 else
     # Install Docker via dnf
     sudo dnf install -y dnf-plugins-core
-    sudo dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo
+    
+    # Add Docker repo (compatible with newer Fedora)
+    sudo tee /etc/yum.repos.d/docker-ce.repo > /dev/null <<REPO
+[docker-ce-stable]
+name=Docker CE Stable - \$basearch
+baseurl=https://download.docker.com/linux/fedora/\$releasever/\$basearch/stable
+enabled=1
+gpgcheck=1
+gpgkey=https://download.docker.com/linux/fedora/gpg
+REPO
+    
     sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 fi
 
