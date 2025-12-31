@@ -10,6 +10,7 @@
 # - Python 3.13 with venv
 # - DealGenome PE Sourcing Engine
 # - Systemd service (auto-start on boot)
+# - Caddy for HTTPS (optional)
 #
 # Run as a regular user with sudo privileges.
 # Usage: ./install-dealgenome.sh
@@ -35,6 +36,9 @@ REPO_URL="https://github.com/gpatkins/pe-sourcing-engine.git"
 # Get the current user (who ran the script)
 CURRENT_USER=$(whoami)
 
+# Get server IP address
+SERVER_IP=$(hostname -I | awk '{print $1}')
+
 echo -e "${BLUE}"
 echo "╔════════════════════════════════════════════════════════════╗"
 echo "║           DealGenome Installation Script                   ║"
@@ -44,11 +48,13 @@ echo -e "${NC}"
 
 echo -e "${YELLOW}Note: Tested on Fedora. Recommended: 1 CPU, 6GB RAM${NC}"
 echo ""
+echo -e "${GREEN}Server IP Address: ${YELLOW}$SERVER_IP${NC}"
+echo ""
 
 # -----------------------------------------------------------------------------
 # Pre-flight checks
 # -----------------------------------------------------------------------------
-echo -e "${BLUE}[1/10] Pre-flight checks...${NC}"
+echo -e "${BLUE}[1/11] Pre-flight checks...${NC}"
 
 # Check if running as root (we don't want that)
 if [ "$EUID" -eq 0 ]; then
@@ -69,7 +75,7 @@ echo -e "${GREEN}✓ Running as user: $CURRENT_USER${NC}"
 # Install system packages
 # -----------------------------------------------------------------------------
 echo ""
-echo -e "${BLUE}[2/10] Installing system packages...${NC}"
+echo -e "${BLUE}[2/11] Installing system packages...${NC}"
 
 sudo dnf install -y \
     python3.13 \
@@ -89,7 +95,7 @@ echo -e "${GREEN}✓ System packages installed${NC}"
 # Initialize PostgreSQL
 # -----------------------------------------------------------------------------
 echo ""
-echo -e "${BLUE}[3/10] Setting up PostgreSQL...${NC}"
+echo -e "${BLUE}[3/11] Setting up PostgreSQL...${NC}"
 
 # Check if PostgreSQL is already initialized
 if [ ! -f /var/lib/pgsql/data/PG_VERSION ]; then
@@ -122,7 +128,7 @@ echo -e "${GREEN}✓ PostgreSQL configured and running${NC}"
 # Prompt for database password
 # -----------------------------------------------------------------------------
 echo ""
-echo -e "${BLUE}[4/10] Database configuration...${NC}"
+echo -e "${BLUE}[4/11] Database configuration...${NC}"
 
 while true; do
     echo -n "Enter password for database user '$DB_USER': "
@@ -168,7 +174,7 @@ echo -e "${GREEN}✓ Database user and database created${NC}"
 # Clone or update repository
 # -----------------------------------------------------------------------------
 echo ""
-echo -e "${BLUE}[5/10] Setting up application directory...${NC}"
+echo -e "${BLUE}[5/11] Setting up application directory...${NC}"
 
 if [ -d "$INSTALL_DIR/.git" ]; then
     echo "Repository already exists. Pulling latest changes..."
@@ -188,7 +194,7 @@ echo -e "${GREEN}✓ Application code ready at $INSTALL_DIR${NC}"
 # Set up Python virtual environment
 # -----------------------------------------------------------------------------
 echo ""
-echo -e "${BLUE}[6/10] Setting up Python virtual environment...${NC}"
+echo -e "${BLUE}[6/11] Setting up Python virtual environment...${NC}"
 
 if [ ! -d "$VENV_DIR" ]; then
     python3.13 -m venv "$VENV_DIR"
@@ -204,7 +210,7 @@ echo -e "${GREEN}✓ Python environment configured${NC}"
 # Configure secrets.env
 # -----------------------------------------------------------------------------
 echo ""
-echo -e "${BLUE}[7/10] Configuring application secrets...${NC}"
+echo -e "${BLUE}[7/11] Configuring application secrets...${NC}"
 
 SECRETS_FILE="$INSTALL_DIR/config/secrets.env"
 mkdir -p "$INSTALL_DIR/config"
@@ -258,7 +264,7 @@ echo -e "${GREEN}✓ Secrets configured at $SECRETS_FILE${NC}"
 # Initialize database schema
 # -----------------------------------------------------------------------------
 echo ""
-echo -e "${BLUE}[8/10] Initializing database schema...${NC}"
+echo -e "${BLUE}[8/11] Initializing database schema...${NC}"
 
 PGPASSWORD="$DB_PASS" psql -h localhost -U "$DB_USER" -d "$DB_NAME" -f "$INSTALL_DIR/schema/current.sql"
 
@@ -268,7 +274,7 @@ echo -e "${GREEN}✓ Database schema initialized${NC}"
 # Set up systemd service
 # -----------------------------------------------------------------------------
 echo ""
-echo -e "${BLUE}[9/10] Creating systemd service...${NC}"
+echo -e "${BLUE}[9/11] Creating systemd service...${NC}"
 
 sudo tee /etc/systemd/system/${SERVICE_NAME}.service > /dev/null <<EOF
 [Unit]
@@ -313,27 +319,79 @@ echo -e "${GREEN}✓ Systemd service created and started${NC}"
 mkdir -p "$INSTALL_DIR/logs"
 
 # -----------------------------------------------------------------------------
+# Optional: Caddy HTTPS Setup
+# -----------------------------------------------------------------------------
+echo ""
+echo -e "${BLUE}[10/11] HTTPS Setup (Optional)...${NC}"
+echo ""
+echo "Caddy can provide automatic HTTPS for your domain."
+echo "Skip this if you're only using the server locally or via IP address."
+echo ""
+echo -n "Do you want to set up HTTPS with Caddy? (y/N): "
+read SETUP_CADDY
+
+if [[ "$SETUP_CADDY" =~ ^[Yy]$ ]]; then
+    echo ""
+    echo -n "Enter your domain name (e.g., deals.example.com): "
+    read DOMAIN_NAME
+    
+    if [ -z "$DOMAIN_NAME" ]; then
+        echo -e "${YELLOW}No domain entered. Skipping Caddy setup.${NC}"
+    else
+        echo ""
+        echo "Installing Caddy..."
+        
+        # Install Caddy
+        sudo dnf install -y 'dnf-command(copr)'
+        sudo dnf copr enable -y @caddy/caddy
+        sudo dnf install -y caddy
+        
+        # Create Caddyfile
+        sudo tee /etc/caddy/Caddyfile > /dev/null <<EOF
+$DOMAIN_NAME {
+    reverse_proxy localhost:8000
+}
+EOF
+        
+        # Open firewall ports
+        if command -v firewall-cmd &> /dev/null; then
+            echo "Configuring firewall..."
+            sudo firewall-cmd --permanent --add-service=http
+            sudo firewall-cmd --permanent --add-service=https
+            sudo firewall-cmd --reload
+        fi
+        
+        # Enable and start Caddy
+        sudo systemctl enable caddy
+        sudo systemctl start caddy
+        
+        echo -e "${GREEN}✓ Caddy installed and configured for $DOMAIN_NAME${NC}"
+        
+        HTTPS_URL="https://$DOMAIN_NAME"
+    fi
+else
+    echo -e "${YELLOW}Skipping HTTPS setup.${NC}"
+fi
+
+# -----------------------------------------------------------------------------
 # Final summary
 # -----------------------------------------------------------------------------
 echo ""
-echo -e "${BLUE}[10/10] Installation complete!${NC}"
+echo -e "${BLUE}[11/11] Installation complete!${NC}"
 echo ""
 echo -e "${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║              DealGenome Installation Complete              ║${NC}"
 echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "  ${YELLOW}Dashboard URL:${NC}    http://$(hostname -I | awk '{print $1}'):8000"
+echo -e "  ${YELLOW}Server IP:${NC}        $SERVER_IP"
+if [ -n "$HTTPS_URL" ]; then
+echo -e "  ${YELLOW}Dashboard URL:${NC}    $HTTPS_URL"
+echo -e "  ${YELLOW}HTTP URL:${NC}         http://$SERVER_IP:8000"
+else
+echo -e "  ${YELLOW}Dashboard URL:${NC}    http://$SERVER_IP:8000"
+fi
 echo -e "  ${YELLOW}Default Login:${NC}    admin@dealgenome.local / admin123"
 echo -e "  ${YELLOW}Config File:${NC}      $SECRETS_FILE"
 echo ""
 echo -e "  ${YELLOW}Service Commands:${NC}"
-echo "    sudo systemctl status $SERVICE_NAME    # Check status"
-echo "    sudo systemctl restart $SERVICE_NAME   # Restart"
-echo "    sudo journalctl -u $SERVICE_NAME -f    # View logs"
-echo ""
-echo -e "  ${YELLOW}Next Steps:${NC}"
-echo "    1. Change the default admin password immediately"
-echo "    2. Add API keys via Admin Dashboard (if not set during install)"
-echo "    3. Run install-metabase.sh to set up analytics"
-echo ""
-echo -e "${GREEN}Thank you for installing DealGenome!${NC}"
+echo "    sudo systemctl status $S
