@@ -80,16 +80,48 @@ echo -e "${BLUE}[2/11] Installing system packages...${NC}"
 sudo dnf install -y \
     python3.13 \
     python3.13-devel \
-    python3.13-pip \
     postgresql-server \
     postgresql-contrib \
     postgresql-devel \
     git \
     gcc \
     libpq-devel \
-    redhat-rpm-config
+    redhat-rpm-config \
+    --skip-unavailable
 
-echo -e "${GREEN}✓ System packages installed${NC}"
+# Verify critical components and install if missing
+echo ""
+echo "Verifying critical components..."
+
+# Check Python 3.13
+if ! command -v python3.13 &> /dev/null; then
+    echo -e "${RED}Error: Python 3.13 not found after install. Aborting.${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ Python 3.13 found${NC}"
+
+# Check pip - install via ensurepip if missing
+if ! python3.13 -m pip --version &> /dev/null; then
+    echo "pip not found, installing via ensurepip..."
+    python3.13 -m ensurepip --upgrade
+fi
+echo -e "${GREEN}✓ pip available${NC}"
+
+# Check PostgreSQL
+if ! command -v psql &> /dev/null; then
+    echo -e "${RED}Error: PostgreSQL client (psql) not found. Aborting.${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ PostgreSQL client found${NC}"
+
+# Check gcc (needed for some pip packages)
+if ! command -v gcc &> /dev/null; then
+    echo -e "${RED}Error: gcc not found. Aborting.${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ gcc found${NC}"
+
+echo -e "${GREEN}✓ System packages installed and verified${NC}"
 
 # -----------------------------------------------------------------------------
 # Initialize PostgreSQL
