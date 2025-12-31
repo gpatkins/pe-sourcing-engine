@@ -261,7 +261,14 @@ cd pe-sourcing-engine
 ./installer/install-metabase.sh
 ```
 
+The installer will:
+- Install PostgreSQL locally and prompt for database password
+- Set up Python 3.13 virtual environment
+- Configure systemd service (auto-starts on boot)
+- Optionally set up Caddy for HTTPS
+
 See `installer/` directory for details.
+
 ## Support & Contact
 
 **Developer:** Gabriel Atkinson  
