@@ -437,4 +437,20 @@ echo -e "  ${YELLOW}Default Login:${NC}    admin@dealgenome.local / admin123"
 echo -e "  ${YELLOW}Config File:${NC}      $SECRETS_FILE"
 echo ""
 echo -e "  ${YELLOW}Service Commands:${NC}"
-echo "    sudo systemctl status $S
+echo "    sudo systemctl status $SERVICE_NAME    # Check status"
+echo "    sudo systemctl restart $SERVICE_NAME   # Restart"
+echo "    sudo journalctl -u $SERVICE_NAME -f    # View logs"
+if [ -n "$HTTPS_URL" ]; then
+echo "    sudo systemctl status caddy            # Caddy status"
+echo "    sudo journalctl -u caddy -f            # Caddy logs"
+fi
+echo ""
+echo -e "  ${YELLOW}Next Steps:${NC}"
+echo "    1. Change the default admin password immediately"
+echo "    2. Add API keys via Admin Dashboard (if not set during install)"
+echo "    3. Run install-metabase.sh to set up analytics"
+if [ -n "$DOMAIN_NAME" ] && [ -z "$HTTPS_URL" ]; then
+echo "    4. Point your domain ($DOMAIN_NAME) DNS to this server IP ($SERVER_IP)"
+fi
+echo ""
+echo -e "${GREEN}Thank you for installing DealGenome!${NC}"
