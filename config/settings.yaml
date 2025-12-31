@@ -45,3 +45,7 @@ discovery:
     text_query: hvac service in slc ut
     region_code: US
     limit: 1
+  - label: plumbing service in casper wy
+    text_query: plumbing service in casper wy
+    region_code: US
+    limit: 1

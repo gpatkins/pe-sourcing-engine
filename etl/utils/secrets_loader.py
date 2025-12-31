@@ -62,10 +62,15 @@ def get_serper_api_key() -> Optional[str]:
     return get_secret('SERPER_API_KEY')
 
 
+def get_metabase_url() -> str:
+    """Get Metabase URL fresh from secrets.env file."""
+    return get_secret('METABASE_URL', 'http://localhost:3000')
+
+
 def get_db_config() -> dict:
     """Get database configuration."""
     return {
-        'host': get_secret('DB_HOST', 'db'),
+        'host': get_secret('DB_HOST', 'localhost'),
         'port': get_secret('DB_PORT', '5432'),
         'name': get_secret('DB_NAME', 'pe_sourcing_db'),
         'user': get_secret('DB_USER', 'pe_sourcer'),

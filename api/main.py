@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
+from etl.utils.secrets_loader import get_metabase_url
 
 import yaml
 from dotenv import load_dotenv
@@ -72,9 +73,6 @@ LOGS_DIR = BASE_DIR / "logs"
 LOG_FILE = LOGS_DIR / "pipeline.log"
 
 load_dotenv(ENV_PATH)
-
-# Metabase URL configuration (v5.2)
-METABASE_URL = os.getenv("METABASE_URL", "http://localhost:3000")
 
 # --- FastAPI App ---
 app = FastAPI(title=f"DealGenome - PE Sourcing Engine v{APP_VERSION}")
@@ -620,7 +618,7 @@ async def dashboard(request: Request, current_user: dict = Depends(get_current_a
         "request": request,
         "stats": stats,
         "current_user": current_user,
-        "metabase_url": METABASE_URL
+        "metabase_url": get_metabase_url()
     })
 
 @app.get("/companies")
@@ -660,7 +658,7 @@ async def companies_page(request: Request, current_user: dict = Depends(get_curr
         "request": request,
         "stats": stats,
         "current_user": current_user,
-        "metabase_url": METABASE_URL
+        "metabase_url": get_metabase_url()
     })
 
 @app.post("/companies/export/csv")

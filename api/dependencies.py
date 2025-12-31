@@ -1,10 +1,11 @@
 """
-FastAPI Dependencies for PE Sourcing Engine v5.1
+FastAPI Dependencies for PE Sourcing Engine v5.8
 Provides authentication and authorization dependencies for route protection.
 """
 
 from typing import Optional
 from fastapi import Cookie, HTTPException, status, Depends
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from api.auth import verify_token, extract_user_from_token, COOKIE_NAME
 from api.models import User
@@ -57,7 +58,7 @@ async def get_current_user(
 ) -> dict:
     """
     Required authentication dependency.
-    Raises HTTPException if no valid token exists.
+    Redirects to /login if no valid token exists.
     Use this for protected routes that require login.
     
     Args:
@@ -67,12 +68,12 @@ async def get_current_user(
         User data dict (user_id, email, role)
         
     Raises:
-        HTTPException: 401 if not authenticated
+        HTTPException: 303 redirect to /login if not authenticated
     """
     if not access_token:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated. Please log in.",
+            status_code=status.HTTP_303_SEE_OTHER,
+            headers={"Location": "/login"}
         )
     
     # Remove "Bearer " prefix if present
@@ -82,9 +83,10 @@ async def get_current_user(
     user_data = extract_user_from_token(access_token)
     
     if user_data is None:
+        # Token invalid or expired - redirect to login
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token. Please log in again.",
+            status_code=status.HTTP_303_SEE_OTHER,
+            headers={"Location": "/login"}
         )
     
     return user_data
@@ -105,7 +107,7 @@ async def get_current_active_user(
         User data dict
         
     Raises:
-        HTTPException: 403 if user is inactive
+        HTTPException: 303 redirect to /login if user is inactive
     """
     cursor = db.cursor()
     cursor.execute(
@@ -116,9 +118,10 @@ async def get_current_active_user(
     cursor.close()
     
     if not result or not result[0]:
+        # User inactive - redirect to login
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive. Contact administrator.",
+            status_code=status.HTTP_303_SEE_OTHER,
+            headers={"Location": "/login"}
         )
     
     return current_user
