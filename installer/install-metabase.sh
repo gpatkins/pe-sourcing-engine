@@ -105,8 +105,6 @@ sudo chown "$CURRENT_USER:$CURRENT_USER" "$METABASE_DIR"
 
 # Create docker-compose.yml
 cat > "$METABASE_DIR/docker-compose.yml" <<EOF
-version: '3.8'
-
 services:
   metabase:
     image: metabase/metabase:latest
@@ -125,7 +123,7 @@ services:
     restart: always
 
   metabase-db:
-    image: postgres:15
+    image: postgres:15-alpine
     container_name: metabase-db
     environment:
       POSTGRES_USER: metabase
