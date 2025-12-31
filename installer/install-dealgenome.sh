@@ -130,19 +130,25 @@ echo ""
 echo -e "${BLUE}[3/11] Setting up PostgreSQL...${NC}"
 
 # Check if PostgreSQL is already initialized
-if [ ! -f /var/lib/pgsql/data/PG_VERSION ]; then
+if [ -f /var/lib/pgsql/data/PG_VERSION ]; then
+    echo "PostgreSQL already initialized."
+else
     echo "Initializing PostgreSQL database..."
     sudo postgresql-setup --initdb
-else
-    echo "PostgreSQL already initialized."
 fi
 
 # Configure PostgreSQL to listen on all interfaces (needed for Docker/Metabase)
-sudo sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/" /var/lib/pgsql/data/postgresql.conf
+if grep -q "^listen_addresses = '\*'" /var/lib/pgsql/data/postgresql.conf 2>/dev/null; then
+    echo "PostgreSQL listen_addresses already configured."
+else
+    sudo sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/" /var/lib/pgsql/data/postgresql.conf
+fi
 
 # Configure PostgreSQL for password authentication
-# Backup original config
-sudo cp /var/lib/pgsql/data/pg_hba.conf /var/lib/pgsql/data/pg_hba.conf.backup
+# Backup original config if not already backed up
+if [ ! -f /var/lib/pgsql/data/pg_hba.conf.backup ]; then
+    sudo cp /var/lib/pgsql/data/pg_hba.conf /var/lib/pgsql/data/pg_hba.conf.backup
+fi
 
 # Update pg_hba.conf to allow local and Docker network connections
 sudo tee /var/lib/pgsql/data/pg_hba.conf > /dev/null <<EOF
@@ -156,7 +162,7 @@ host    all             all             192.168.0.0/16          md5
 EOF
 
 # Start and enable PostgreSQL
-sudo systemctl start postgresql
+sudo systemctl restart postgresql
 sudo systemctl enable postgresql
 
 echo -e "${GREEN}✓ PostgreSQL configured and running${NC}"
