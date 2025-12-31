@@ -137,17 +137,22 @@ else
     echo "PostgreSQL already initialized."
 fi
 
-# Configure PostgreSQL for local password authentication
+# Configure PostgreSQL to listen on all interfaces (needed for Docker/Metabase)
+sudo sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/" /var/lib/pgsql/data/postgresql.conf
+
+# Configure PostgreSQL for password authentication
 # Backup original config
 sudo cp /var/lib/pgsql/data/pg_hba.conf /var/lib/pgsql/data/pg_hba.conf.backup
 
-# Update pg_hba.conf to use md5 authentication for local connections
+# Update pg_hba.conf to allow local and Docker network connections
 sudo tee /var/lib/pgsql/data/pg_hba.conf > /dev/null <<EOF
 # TYPE  DATABASE        USER            ADDRESS                 METHOD
 local   all             postgres                                peer
 local   all             all                                     md5
 host    all             all             127.0.0.1/32            md5
 host    all             all             ::1/128                 md5
+host    all             all             172.16.0.0/12           md5
+host    all             all             192.168.0.0/16          md5
 EOF
 
 # Start and enable PostgreSQL
